@@ -1,0 +1,134 @@
+[
+  {
+    "name": "Read GIS",
+    "syntax": "Read GIS == <gis layer>",
+    "description": "Reads a GIS layer containing model geometry, boundaries, or attributes.",
+    "category": "GIS",
+    "allowedFileTypes": [".shp", ".mif", ".gpkg", ".json", ".geojson"],
+    "examples": ["Read GIS == gis\\2d_code_M01.shp"],
+    "requiresAssignment": true,
+    "requiresFileReference": true,
+    "aliases": ["Read GIS Layer"]
+  },
+  {
+    "name": "Read GRID",
+    "syntax": "Read GRID == <raster grid>",
+    "description": "Reads a raster grid such as DEM, roughness, or initial water level data.",
+    "category": "Raster",
+    "allowedFileTypes": [".asc", ".flt", ".tif", ".tiff", ".dem", ".grd"],
+    "examples": ["Read GRID == grids\\dem_5m.asc"],
+    "requiresAssignment": true,
+    "requiresFileReference": true,
+    "aliases": ["Read Raster"]
+  },
+  {
+    "name": "Read TIN",
+    "syntax": "Read TIN == <tin file>",
+    "description": "Reads a triangulated irregular network surface.",
+    "category": "Terrain",
+    "allowedFileTypes": [".tin", ".12da", ".xml"],
+    "examples": ["Read TIN == terrain\\survey_surface.tin"],
+    "requiresAssignment": true,
+    "requiresFileReference": true,
+    "aliases": []
+  },
+  {
+    "name": "Read RowCol",
+    "syntax": "Read RowCol == <row column file>",
+    "description": "Reads row-column data for grid-based inputs.",
+    "category": "Grid",
+    "allowedFileTypes": [".csv", ".txt", ".dat"],
+    "examples": ["Read RowCol == tables\\loss_zones.csv"],
+    "requiresAssignment": true,
+    "requiresFileReference": true,
+    "aliases": ["Read Row Col"]
+  },
+  {
+    "name": "Read Materials File",
+    "syntax": "Read Materials File == <materials file>",
+    "description": "Reads material IDs and hydraulic properties.",
+    "category": "Materials",
+    "allowedFileTypes": [".tmf", ".csv", ".txt"],
+    "examples": ["Read Materials File == materials\\materials.tmf"],
+    "requiresAssignment": true,
+    "requiresFileReference": true,
+    "aliases": ["Materials File"]
+  },
+  {
+    "name": "BC Database",
+    "syntax": "BC Database == <boundary database>",
+    "description": "Sets the boundary condition database used by boundary layers.",
+    "category": "Boundaries",
+    "allowedFileTypes": [".csv", ".dbf", ".xlsx", ".xls"],
+    "examples": ["BC Database == bc_dbase\\bc_dbase.csv"],
+    "requiresAssignment": true,
+    "requiresFileReference": true,
+    "aliases": ["Boundary Database"]
+  },
+  {
+    "name": "Geometry Control File",
+    "syntax": "Geometry Control File == <file.tgc>",
+    "description": "References the geometry control file from a simulation control file.",
+    "category": "Control Files",
+    "allowedFileTypes": [".tgc"],
+    "examples": ["Geometry Control File == model\\M01_001.tgc"],
+    "requiresAssignment": true,
+    "requiresFileReference": true,
+    "aliases": ["TGC"]
+  },
+  {
+    "name": "BC Control File",
+    "syntax": "BC Control File == <file.tbc>",
+    "description": "References a boundary condition control file.",
+    "category": "Control Files",
+    "allowedFileTypes": [".tbc"],
+    "examples": ["BC Control File == bc\\M01_001.tbc"],
+    "requiresAssignment": true,
+    "requiresFileReference": true,
+    "aliases": ["TBC"]
+  },
+  {
+    "name": "Event File",
+    "syntax": "Event File == <file.tef>",
+    "description": "References an event file for event and scenario variable definitions.",
+    "category": "Control Files",
+    "allowedFileTypes": [".tef"],
+    "examples": ["Event File == events\\design_events.tef"],
+    "requiresAssignment": true,
+    "requiresFileReference": true,
+    "aliases": ["TEF"]
+  },
+  {
+    "name": "Output Folder",
+    "syntax": "Output Folder == <folder>",
+    "description": "Sets the output folder for simulation results.",
+    "category": "Output",
+    "allowedFileTypes": [],
+    "examples": ["Output Folder == results\\<<~s1~>>\\"],
+    "requiresAssignment": true,
+    "requiresFileReference": false,
+    "aliases": ["Write Folder"]
+  },
+  {
+    "name": "Set Code",
+    "syntax": "Set Code == <code value>",
+    "description": "Sets model code values for selected cells or features.",
+    "category": "Geometry",
+    "allowedFileTypes": [],
+    "examples": ["Set Code == 1"],
+    "requiresAssignment": true,
+    "requiresFileReference": false,
+    "aliases": []
+  },
+  {
+    "name": "Cell Size",
+    "syntax": "Cell Size == <metres>",
+    "description": "Defines the 2D domain cell size.",
+    "category": "Geometry",
+    "allowedFileTypes": [],
+    "examples": ["Cell Size == 5"],
+    "requiresAssignment": true,
+    "requiresFileReference": false,
+    "aliases": ["Cellsize"]
+  }
+]
