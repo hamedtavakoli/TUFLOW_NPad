@@ -22,4 +22,11 @@ describe('getAutocompleteSuggestions', () => {
       insertText: 'gis\\2d_code.shp'
     });
   });
+
+  it('matches file suggestions after an opening quote', () => {
+    const inputs = [classifyInput('2d_code.shp', 'gis\\2d_code.shp')];
+    const suggestions = getAutocompleteSuggestions('Read GIS == "gis', inputs);
+
+    expect(suggestions[0]?.insertText).toBe('gis\\2d_code.shp');
+  });
 });

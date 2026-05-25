@@ -10,6 +10,7 @@ export interface TuflowCommand {
   requiresAssignment: boolean;
   requiresFileReference: boolean;
   aliases: string[];
+  duplicatePolicy?: 'allow' | 'warn';
 }
 
 export interface ProjectInput {

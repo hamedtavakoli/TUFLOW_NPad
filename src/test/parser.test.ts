@@ -20,4 +20,10 @@ describe('parseTuflowText', () => {
 
     expect(line.placeholders).toEqual(['<<~s1~>>']);
   });
+
+  it('keeps quoted references with spaces intact', () => {
+    const line = parseLine('Read GIS == "gis\\model layers\\2d_code.shp" | optional', 1);
+
+    expect(line.reference).toBe('gis\\model layers\\2d_code.shp');
+  });
 });

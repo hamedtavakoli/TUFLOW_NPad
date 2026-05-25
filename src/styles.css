@@ -138,6 +138,11 @@ button {
   font-size: 14px;
 }
 
+.panel-actions {
+  display: flex;
+  gap: 6px;
+}
+
 .icon-button,
 .manual-add button,
 .input-row button {
@@ -277,7 +282,7 @@ button {
 }
 
 .search-box {
-  width: 220px;
+  width: 286px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -287,6 +292,18 @@ button {
 .search-box input {
   height: 30px;
   padding: 0 9px;
+}
+
+.search-box button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #cbd4dd;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #23303f;
 }
 
 .code-frame {
@@ -367,6 +384,19 @@ button {
   overflow: hidden;
 }
 
+.code-line {
+  display: block;
+  min-height: 22px;
+}
+
+.code-line.error {
+  background: rgba(211, 49, 49, 0.08);
+}
+
+.code-line.warning {
+  background: rgba(217, 132, 0, 0.1);
+}
+
 .code-input {
   resize: none;
   background: transparent;
@@ -398,6 +428,24 @@ button {
   color: #2f5f9e;
 }
 
+.tok-file {
+  color: #1c6c43;
+  font-weight: 700;
+}
+
+.tok-placeholder {
+  color: #7b3fb2;
+  font-weight: 700;
+}
+
+.tok-problem.error {
+  text-decoration: underline wavy rgba(211, 49, 49, 0.85);
+}
+
+.tok-problem.warning {
+  text-decoration: underline wavy rgba(217, 132, 0, 0.85);
+}
+
 .tok-search {
   background: #fff0a8;
   border-radius: 3px;
@@ -406,8 +454,6 @@ button {
 .suggestions {
   position: absolute;
   z-index: 5;
-  top: 52px;
-  left: 86px;
   width: min(520px, calc(100% - 110px));
   max-height: 288px;
   overflow: auto;
@@ -429,7 +475,8 @@ button {
   text-align: left;
 }
 
-.suggestions button:hover {
+.suggestions button:hover,
+.suggestions button.active {
   background: #eaf5f6;
 }
 

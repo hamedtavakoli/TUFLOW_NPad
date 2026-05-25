@@ -51,15 +51,16 @@ export function validateParsedLines(lines: ParsedLine[], inputs: ProjectInput[])
     }
 
     if (line.reference) {
-      const extension = getExtension(line.reference);
-      const matchedInput = inputs.some((input) => samePath(input.path, line.reference) || input.name === line.reference);
+      const reference = line.reference;
+      const extension = getExtension(reference);
+      const matchedInput = inputs.some((input) => samePath(input.path, reference) || input.name === reference);
 
       if (command.allowedFileTypes.length > 0 && extension && !command.allowedFileTypes.includes(extension)) {
         problems.push({
           id: `extension-${line.lineNumber}`,
           lineNumber: line.lineNumber,
           severity: 'warning',
-          message: `"${line.reference}" does not match expected type for "${command.name}".`,
+          message: `"${reference}" does not match expected type for "${command.name}".`,
           suggestion: `Expected ${command.allowedFileTypes.join(', ')}.`
         });
       }
@@ -69,7 +70,7 @@ export function validateParsedLines(lines: ParsedLine[], inputs: ProjectInput[])
           id: `missing-input-${line.lineNumber}`,
           lineNumber: line.lineNumber,
           severity: 'warning',
-          message: `Referenced input "${line.reference}" is not registered in the project panel.`,
+          message: `Referenced input "${reference}" is not registered in the project panel.`,
           suggestion: 'Add it to Project Inputs or correct the path.'
         });
       }
@@ -78,8 +79,7 @@ export function validateParsedLines(lines: ParsedLine[], inputs: ProjectInput[])
 
   for (const command of tuflowCommands) {
     const linesForCommand = commandOccurrences.get(normaliseCommandName(command.name)) ?? [];
-    const duplicateSensitive = ['cell size', 'bc database', 'geometry control file', 'bc control file'];
-    if (duplicateSensitive.includes(normaliseCommandName(command.name)) && linesForCommand.length > 1) {
+    if (command.duplicatePolicy === 'warn' && linesForCommand.length > 1) {
       for (const lineNumber of linesForCommand.slice(1)) {
         problems.push({
           id: `duplicate-${command.name}-${lineNumber}`,

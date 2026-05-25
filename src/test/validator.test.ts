@@ -23,4 +23,10 @@ describe('validateTuflowText', () => {
 
     expect(problems.some((problem) => problem.id.startsWith('extension'))).toBe(true);
   });
+
+  it('uses command metadata to warn about duplicate-sensitive commands', () => {
+    const problems = validateTuflowText('Cell Size == 5\nCell Size == 10', []);
+
+    expect(problems.some((problem) => problem.id.startsWith('duplicate-Cell Size'))).toBe(true);
+  });
 });

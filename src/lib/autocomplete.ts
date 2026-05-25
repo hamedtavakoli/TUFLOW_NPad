@@ -6,7 +6,7 @@ export function getAutocompleteSuggestions(lineText: string, inputs: ProjectInpu
   const assignmentIndex = lineText.indexOf('==');
   if (assignmentIndex >= 0) {
     const commandText = lineText.slice(0, assignmentIndex).trim();
-    const partialReference = lineText.slice(assignmentIndex + 2).trim().toLowerCase();
+    const partialReference = lineText.slice(assignmentIndex + 2).trim().replace(/^["']/, '').toLowerCase();
     const command = findCommand(commandText);
     const allowedTypes = command?.allowedFileTypes ?? [];
 

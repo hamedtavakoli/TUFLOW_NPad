@@ -44,14 +44,16 @@ export function normaliseCommandName(value: string): string {
 }
 
 export function detectReference(parameterText: string): string | undefined {
-  const cleaned = parameterText.trim().replace(/^["']|["']$/g, '');
+  const cleaned = parameterText.trim();
   if (!cleaned) {
     return undefined;
   }
 
-  const firstToken = cleaned.split(/\s+/)[0];
-  if (/[\\/]/.test(firstToken) || /\.[a-z0-9]+$/i.test(firstToken)) {
-    return firstToken;
+  const quoted = cleaned.match(/^(['"])(.*?)\1/);
+  const candidate = quoted?.[2] ?? cleaned.split(/\s+/)[0];
+  const normalised = candidate.trim();
+  if (/[\\/]/.test(normalised) || /\.[a-z0-9]+$/i.test(normalised)) {
+    return normalised;
   }
 
   return undefined;

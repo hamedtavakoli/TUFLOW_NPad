@@ -38,6 +38,7 @@ function App() {
   const [text, setText] = useState(starterText);
   const [inputs, setInputs] = useState<ProjectInput[]>(starterInputs);
   const [activeLine, setActiveLine] = useState(1);
+  const [requestedLine, setRequestedLine] = useState<{ lineNumber: number; nonce: number } | null>(null);
   const [search, setSearch] = useState('');
 
   const problems = useMemo(() => validateTuflowText(text, inputs), [text, inputs]);
@@ -45,6 +46,10 @@ function App() {
   const newFile = () => setText('! New TUFLOW control file\n');
   const saveFile = () => downloadText('model.tcf', text);
   const exportProblems = () => downloadText('tuflow-problems.json', JSON.stringify(problems, null, 2));
+  const goToLine = (line: number) => {
+    setActiveLine(line);
+    setRequestedLine({ lineNumber: line, nonce: Date.now() });
+  };
 
   return (
     <div className="app-shell">
@@ -70,7 +75,7 @@ function App() {
             <Save size={17} />
             Save
           </button>
-          <button type="button" onClick={() => setActiveLine(problems[0]?.lineNumber ?? activeLine)} title="Validate">
+          <button type="button" onClick={() => goToLine(problems[0]?.lineNumber ?? activeLine)} title="Validate">
             <PlayCircle size={17} />
             Validate
           </button>
@@ -95,10 +100,11 @@ function App() {
             problems={problems}
             activeLine={activeLine}
             onActiveLineChange={setActiveLine}
+            requestedLine={requestedLine}
             search={search}
             onSearchChange={setSearch}
           />
-          <ProblemsPanel problems={problems} activeLine={activeLine} onSelectLine={setActiveLine} />
+          <ProblemsPanel problems={problems} activeLine={activeLine} onSelectLine={goToLine} />
         </section>
         <CommandHelp activeLine={activeLine} text={text} />
       </main>

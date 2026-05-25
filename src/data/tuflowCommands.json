@@ -63,7 +63,8 @@
     "examples": ["BC Database == bc_dbase\\bc_dbase.csv"],
     "requiresAssignment": true,
     "requiresFileReference": true,
-    "aliases": ["Boundary Database"]
+    "aliases": ["Boundary Database"],
+    "duplicatePolicy": "warn"
   },
   {
     "name": "Geometry Control File",
@@ -74,7 +75,8 @@
     "examples": ["Geometry Control File == model\\M01_001.tgc"],
     "requiresAssignment": true,
     "requiresFileReference": true,
-    "aliases": ["TGC"]
+    "aliases": ["TGC"],
+    "duplicatePolicy": "warn"
   },
   {
     "name": "BC Control File",
@@ -85,7 +87,8 @@
     "examples": ["BC Control File == bc\\M01_001.tbc"],
     "requiresAssignment": true,
     "requiresFileReference": true,
-    "aliases": ["TBC"]
+    "aliases": ["TBC"],
+    "duplicatePolicy": "warn"
   },
   {
     "name": "Event File",
@@ -129,6 +132,7 @@
     "examples": ["Cell Size == 5"],
     "requiresAssignment": true,
     "requiresFileReference": false,
-    "aliases": ["Cellsize"]
+    "aliases": ["Cellsize"],
+    "duplicatePolicy": "warn"
   }
 ]

@@ -1,5 +1,5 @@
 import type { DragEvent, FormEvent } from 'react';
-import { Plus, Trash2, UploadCloud } from 'lucide-react';
+import { FolderPlus, Plus, Trash2, UploadCloud } from 'lucide-react';
 import { classifyInput } from '../lib/autocomplete';
 import type { ProjectInput } from '../lib/types';
 
@@ -22,10 +22,16 @@ export function FilePanel({ inputs, onAddInput, onRemoveInput }: FilePanelProps)
           <h2>Project Inputs</h2>
           <p>{inputs.length} registered</p>
         </div>
-        <label className="icon-button" title="Upload inputs">
-          <UploadCloud size={18} />
-          <input multiple type="file" onChange={(event) => handleFiles(event.target.files, onAddInput)} />
-        </label>
+        <div className="panel-actions">
+          <label className="icon-button" title="Upload inputs">
+            <UploadCloud size={18} />
+            <input multiple type="file" onChange={(event) => handleFiles(event.target.files, onAddInput)} />
+          </label>
+          <label className="icon-button" title="Register a folder">
+            <FolderPlus size={18} />
+            <input multiple type="file" {...{ webkitdirectory: '', directory: '' }} onChange={(event) => handleFiles(event.target.files, onAddInput)} />
+          </label>
+        </div>
       </div>
       <form className="manual-add" onSubmit={(event) => handleManualAdd(event, onAddInput)}>
         <input name="path" placeholder="gis\\2d_bc_M01.shp" />
@@ -63,7 +69,10 @@ function handleDrop(event: DragEvent, onAddInput: (input: ProjectInput) => void)
 }
 
 function handleFiles(files: FileList | null, onAddInput: (input: ProjectInput) => void) {
-  Array.from(files ?? []).forEach((file) => onAddInput(classifyInput(file.name, file.webkitRelativePath || file.name)));
+  Array.from(files ?? []).forEach((file) => {
+    const path = file.webkitRelativePath || file.name;
+    onAddInput(classifyInput(file.name, path.replaceAll('/', '\\')));
+  });
 }
 
 function handleManualAdd(event: FormEvent<HTMLFormElement>, onAddInput: (input: ProjectInput) => void) {
