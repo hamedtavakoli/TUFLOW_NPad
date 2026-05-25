@@ -37,13 +37,11 @@ describe('validateTuflowText', () => {
     expect(problems.some((problem) => problem.id.startsWith('command-token'))).toBe(false);
   });
 
-  it('soft-warns for known keyword phrases that are not configured yet', () => {
+  it('does not warn for known keyword phrases that are not configured yet', () => {
     const problems = validateTuflowText('Read GIS Z Shape == gis\\zshape.shp', [classifyInput('zshape.shp', 'gis\\zshape.shp')]);
 
-    expect(problems).toContainEqual(expect.objectContaining({
-      id: 'unknown-phrase-1',
-      severity: 'warning'
-    }));
+    expect(problems.some((problem) => problem.id.startsWith('unknown'))).toBe(false);
+    expect(problems.some((problem) => problem.id.startsWith('command-token'))).toBe(false);
   });
 
   it('soft-warns for unknown command tokens without breaking parsing', () => {

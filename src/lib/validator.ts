@@ -30,15 +30,7 @@ export function validateParsedLines(lines: ParsedLine[], inputs: ProjectInput[])
     }
 
     if (!command) {
-      if (tokenCheck.recognised) {
-        problems.push({
-          id: `unknown-phrase-${line.lineNumber}`,
-          lineNumber: line.lineNumber,
-          severity: 'warning',
-          message: `Command phrase "${tokenCheck.normalisedCommand}" is not in the configured command definitions yet.`,
-          suggestion: 'Token spelling looks valid; phrase-level command coverage can be added later.'
-        });
-      } else if (tokenCheck.unknownTokens.length === 0) {
+      if (!tokenCheck.recognised && tokenCheck.unknownTokens.length === 0) {
         problems.push({
           id: `unknown-${line.lineNumber}`,
           lineNumber: line.lineNumber,
