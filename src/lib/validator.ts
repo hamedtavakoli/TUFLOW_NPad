@@ -1,6 +1,7 @@
 import { findCommand, findCommandInLooseLine, tuflowCommands } from './commands';
 import { getExtension, normaliseCommandName, parseTuflowText } from './parser';
 import type { ParsedLine, Problem, ProjectInput } from './types';
+import { checkTuflowCommandTokens } from '../tuflow/parser/tuflowParser';
 
 export function validateTuflowText(text: string, inputs: ProjectInput[]): Problem[] {
   return validateParsedLines(parseTuflowText(text), inputs);
@@ -15,15 +16,37 @@ export function validateParsedLines(lines: ParsedLine[], inputs: ProjectInput[])
       continue;
     }
 
-    const command = findCommand(line.commandText) ?? (!line.hasAssignment ? findCommandInLooseLine(line.commandText) : undefined);
-    if (!command) {
+    const looseCommand = !line.hasAssignment ? findCommandInLooseLine(line.commandText) : undefined;
+    const tokenCheck = checkTuflowCommandTokens(looseCommand?.name ?? line.commandText);
+    const command = findCommand(tokenCheck.normalisedCommand) ?? looseCommand;
+    if (tokenCheck.unknownTokens.length > 0) {
       problems.push({
-        id: `unknown-${line.lineNumber}`,
+        id: `command-token-${line.lineNumber}`,
         lineNumber: line.lineNumber,
         severity: 'warning',
-        message: `Unknown TUFLOW command "${line.commandText}".`,
-        suggestion: closestCommandSuggestion(line.commandText)
+        message: `Possible typo in command word(s): ${tokenCheck.unknownTokens.join(', ')}.`,
+        suggestion: 'Check spelling against the TUFLOW keyword list.'
       });
+    }
+
+    if (!command) {
+      if (tokenCheck.recognised) {
+        problems.push({
+          id: `unknown-phrase-${line.lineNumber}`,
+          lineNumber: line.lineNumber,
+          severity: 'warning',
+          message: `Command phrase "${tokenCheck.normalisedCommand}" is not in the configured command definitions yet.`,
+          suggestion: 'Token spelling looks valid; phrase-level command coverage can be added later.'
+        });
+      } else if (tokenCheck.unknownTokens.length === 0) {
+        problems.push({
+          id: `unknown-${line.lineNumber}`,
+          lineNumber: line.lineNumber,
+          severity: 'warning',
+          message: `Unknown TUFLOW command "${tokenCheck.normalisedCommand}".`,
+          suggestion: closestCommandSuggestion(tokenCheck.normalisedCommand)
+        });
+      }
       continue;
     }
 

@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { detectFileRefs, parseTuflowDocument, parseTuflowLine } from './tuflowParser';
+import { checkTuflowCommandTokens, detectFileRefs, parseTuflowDocument, parseTuflowLine } from './tuflowParser';
 
 describe('parseTuflowLine', () => {
   it('parses a command assignment with a file reference', () => {
-    const line = parseTuflowLine('Read GIS Z Shape == input/topography/zshape.shp', 7);
+    const line = parseTuflowLine('Read    GIS   Z Shape == input/topography/zshape.shp', 7);
 
     expect(line).toMatchObject({
       lineNumber: 7,
-      raw: 'Read GIS Z Shape == input/topography/zshape.shp',
+      raw: 'Read    GIS   Z Shape == input/topography/zshape.shp',
       type: 'command',
       command: 'Read GIS Z Shape',
       operator: '==',
@@ -36,6 +36,24 @@ describe('parseTuflowLine', () => {
 
     expect(line.type).toBe('invalid');
     expect(line.warnings).toContain('Missing == operator.');
+  });
+
+  it('generates soft warnings for unknown command tokens', () => {
+    const line = parseTuflowLine('Reed GIS == input/topography/zshape.shp', 1);
+
+    expect(line.type).toBe('command');
+    expect(line.warnings).toEqual(['Possible typo in command word(s): Reed.']);
+  });
+
+  it('checks command tokens case-insensitively', () => {
+    const check = checkTuflowCommandTokens('  read    gis   z Shape  ');
+
+    expect(check).toMatchObject({
+      normalisedCommand: 'read gis z Shape',
+      tokens: ['read', 'gis', 'z', 'Shape'],
+      unknownTokens: [],
+      recognised: true
+    });
   });
 
   it('parses whole documents line by line', () => {

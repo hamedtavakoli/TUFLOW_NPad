@@ -14,6 +14,13 @@ export interface TuflowAstLine {
   warnings: string[];
 }
 
+export interface TuflowCommandTokenCheck {
+  normalisedCommand: string;
+  tokens: string[];
+  unknownTokens: string[];
+  recognised: boolean;
+}
+
 interface SplitCommentResult {
   code: string;
   comment?: string;
@@ -53,8 +60,9 @@ export function parseTuflowLine(raw: string, lineNumber: number): TuflowAstLine 
     };
   }
 
-  const command = code.slice(0, assignmentIndex).trim();
+  const command = normaliseTuflowCommandText(code.slice(0, assignmentIndex));
   const value = code.slice(assignmentIndex + 2).trim();
+  const tokenCheck = checkTuflowCommandTokens(command);
 
   if (!command) {
     warnings.push('Missing command before ==.');
@@ -62,8 +70,8 @@ export function parseTuflowLine(raw: string, lineNumber: number): TuflowAstLine 
   if (!value) {
     warnings.push('Missing value after ==.');
   }
-  if (command && !hasKnownCommandWord(command)) {
-    warnings.push('Command is not recognised from the TUFLOW keyword list.');
+  if (command && tokenCheck.unknownTokens.length > 0) {
+    warnings.push(`Possible typo in command word(s): ${tokenCheck.unknownTokens.join(', ')}.`);
   }
 
   return {
@@ -109,6 +117,30 @@ export function detectFileRefs(value: string): string[] {
   return Array.from(value.matchAll(fileReferencePattern), (match) => match[1] ?? match[2] ?? match[3]).filter(Boolean);
 }
 
+export function normaliseTuflowCommandText(command: string): string {
+  return command.trim().replace(/\s+/g, ' ');
+}
+
+export function splitTuflowCommandTokens(command: string): string[] {
+  return normaliseTuflowCommandText(command)
+    .split(/\s+/)
+    .map((token) => token.replace(/^[()[\],]+|[()[\],]+$/g, ''))
+    .filter(Boolean);
+}
+
+export function checkTuflowCommandTokens(command: string): TuflowCommandTokenCheck {
+  const normalisedCommand = normaliseTuflowCommandText(command);
+  const tokens = splitTuflowCommandTokens(normalisedCommand);
+  const unknownTokens = tokens.filter((token) => !isTuflowKeyword(token));
+
+  return {
+    normalisedCommand,
+    tokens,
+    unknownTokens,
+    recognised: tokens.length > 0 && unknownTokens.length === 0
+  };
+}
+
 function baseLine(lineNumber: number, raw: string, type: TuflowAstLineType): TuflowAstLine {
   return {
     lineNumber,
@@ -126,8 +158,4 @@ function isLineComment(trimmed: string): boolean {
 function looksLikeCommand(code: string): boolean {
   const firstWord = code.trim().split(/\s+/)[0];
   return Boolean(firstWord && tuflowCommandLeadWordSet.has(firstWord.toLowerCase()));
-}
-
-function hasKnownCommandWord(command: string): boolean {
-  return command.split(/\s+/).some((word) => isTuflowKeyword(word));
 }

@@ -29,4 +29,30 @@ describe('validateTuflowText', () => {
 
     expect(problems.some((problem) => problem.id.startsWith('duplicate-Cell Size'))).toBe(true);
   });
+
+  it('normalises command spacing and case before configured command matching', () => {
+    const problems = validateTuflowText('read    gis == gis\\2d_code.shp', [classifyInput('2d_code.shp', 'gis\\2d_code.shp')]);
+
+    expect(problems.some((problem) => problem.id.startsWith('unknown'))).toBe(false);
+    expect(problems.some((problem) => problem.id.startsWith('command-token'))).toBe(false);
+  });
+
+  it('soft-warns for known keyword phrases that are not configured yet', () => {
+    const problems = validateTuflowText('Read GIS Z Shape == gis\\zshape.shp', [classifyInput('zshape.shp', 'gis\\zshape.shp')]);
+
+    expect(problems).toContainEqual(expect.objectContaining({
+      id: 'unknown-phrase-1',
+      severity: 'warning'
+    }));
+  });
+
+  it('soft-warns for unknown command tokens without breaking parsing', () => {
+    const problems = validateTuflowText('Reed GIS == gis\\2d_code.shp', [classifyInput('2d_code.shp', 'gis\\2d_code.shp')]);
+
+    expect(problems).toContainEqual(expect.objectContaining({
+      id: 'command-token-1',
+      severity: 'warning',
+      message: 'Possible typo in command word(s): Reed.'
+    }));
+  });
 });
