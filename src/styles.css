@@ -414,18 +414,28 @@ button {
   font-style: italic;
 }
 
-.tok-command {
+.tok-command,
+.tok-include {
   color: #004f59;
   font-weight: 700;
 }
 
-.tok-assign {
+.tok-include {
+  color: #7c2d12;
+}
+
+.tok-operator {
   color: #9b4b00;
   font-weight: 800;
 }
 
-.tok-param {
+.tok-keyword,
+.tok-text {
   color: #2f5f9e;
+}
+
+.tok-text {
+  color: #1f2a36;
 }
 
 .tok-file {
@@ -433,9 +443,17 @@ button {
   font-weight: 700;
 }
 
-.tok-placeholder {
+.tok-variable {
   color: #7b3fb2;
   font-weight: 700;
+}
+
+.tok-number {
+  color: #9a5b00;
+}
+
+.tok-string {
+  color: #8a4f00;
 }
 
 .tok-problem.error {

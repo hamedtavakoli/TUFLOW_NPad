@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import { ChevronDown, ChevronUp, Search } from 'lucide-react';
 import { getAutocompleteSuggestions } from '../lib/autocomplete';
 import type { Problem, ProjectInput, Suggestion } from '../lib/types';
+import { highlightTuflowLine } from '../tuflow/editor/tuflowHighlighter';
 
 interface EditorProps {
   value: string;
@@ -119,7 +120,13 @@ export function Editor({ value, onChange, inputs, problems, activeLine, onActive
         <pre className="highlight-layer" aria-hidden="true" ref={highlightRef}>
           {lines.map((line, index) => (
             <span className={`code-line ${problemLines.get(index + 1)?.severity ?? ''}`} key={`${index}-${line}`}>
-              {highlightLine(line, search, problemLines.get(index + 1))}
+              {problemLines.get(index + 1) ? (
+                <span className={`tok-problem ${problemLines.get(index + 1)?.severity}`}>
+                  {highlightTuflowLine(line, search, index + 1)}
+                </span>
+              ) : (
+                highlightTuflowLine(line, search, index + 1)
+              )}
             </span>
           ))}
         </pre>
@@ -182,71 +189,6 @@ function applySuggestion(suggestion: Suggestion, value: string, onChange: (value
     textarea.focus();
     textarea.setSelectionRange(nextCaret, nextCaret);
   });
-}
-
-function highlightLine(line: string, search: string, problem?: Problem) {
-  if (/^\s*(!|#|\/\/)/.test(line)) {
-    return <span className="tok-comment">{line || ' '}</span>;
-  }
-
-  const assignmentIndex = line.indexOf('==');
-  const content =
-    assignmentIndex >= 0 ? (
-      <>
-        <span className="tok-command">{line.slice(0, assignmentIndex)}</span>
-        <span className="tok-assign">==</span>
-        <span className="tok-param">{highlightParameter(line.slice(assignmentIndex + 2))}</span>
-      </>
-    ) : (
-      <span className="tok-command">{line || ' '}</span>
-    );
-
-  if (!search.trim() || !line.toLowerCase().includes(search.toLowerCase())) {
-    return problem ? <span className={`tok-problem ${problem.severity}`}>{content}</span> : content;
-  }
-
-  return (
-    <span className={problem ? `tok-problem ${problem.severity}` : undefined}>
-      {highlightSearch(line, search)}
-    </span>
-  );
-}
-
-function highlightParameter(text: string) {
-  const parts = text.split(/(<<[^>]+>>|~[^~]+~|["'][^"']+["']|\S+\.[a-z0-9]+)/gi);
-  return parts.map((part, index) => {
-    if (/^<<[^>]+>>$|^~[^~]+~$/.test(part)) {
-      return <span className="tok-placeholder" key={`${part}-${index}`}>{part}</span>;
-    }
-    if (/^["'][^"']+["']$|^\S+\.[a-z0-9]+$/i.test(part)) {
-      return <span className="tok-file" key={`${part}-${index}`}>{part}</span>;
-    }
-    return part;
-  });
-}
-
-function highlightSearch(line: string, search: string) {
-  const query = search.trim();
-  if (!query) return line || ' ';
-  const lowerLine = line.toLowerCase();
-  const lowerQuery = query.toLowerCase();
-  const parts: ReactNode[] = [];
-  let cursor = 0;
-  let index = lowerLine.indexOf(lowerQuery);
-
-  while (index >= 0) {
-    if (index > cursor) {
-      parts.push(<span key={`text-${cursor}`}>{line.slice(cursor, index)}</span>);
-    }
-    parts.push(<span className="tok-search" key={`match-${index}`}>{line.slice(index, index + query.length)}</span>);
-    cursor = index + query.length;
-    index = lowerLine.indexOf(lowerQuery, cursor);
-  }
-
-  if (cursor < line.length) {
-    parts.push(<span key={`text-${cursor}`}>{line.slice(cursor)}</span>);
-  }
-  return parts.length > 0 ? parts : line || ' ';
 }
 
 function getLineAtOffset(value: string, offset: number) {
