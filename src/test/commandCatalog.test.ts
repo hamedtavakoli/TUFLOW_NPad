@@ -22,6 +22,11 @@ describe('command catalog normalisation', () => {
     expect(catalog.commands[0].controlFile).toBe('TGC');
     expect(catalog.commands[0].variants.map((variant) => variant.name)).toEqual(['Read Grid Zpts', 'Read Grid Zpts ADD']);
     expect(catalog.commands[0].variants[1].tokens).toEqual(['read', 'grid', 'zpts', 'add']);
+    expect(catalog.commands[0].valueSpec).toMatchObject({
+      expectsValue: true,
+      kinds: expect.arrayContaining(['file']),
+      extensions: expect.arrayContaining(['.grd', '.asc'])
+    });
   });
 
   it('groups flat CSV-shaped rows into one command with variants', () => {
@@ -45,5 +50,26 @@ describe('command catalog normalisation', () => {
     expect(catalog.commands).toHaveLength(1);
     expect(catalog.variants).toHaveLength(2);
     expect(catalog.duplicateVariants).toEqual([]);
+  });
+
+  it('uses ESTRY Control File variants and value metadata from the source record', () => {
+    const catalog = buildTuflowCommandCatalog([
+      {
+        control_file: 'TCF',
+        command_pattern: 'ESTRY Control File',
+        command_variants: ['ESTRY Control File', 'ESTRY Control File AUTO'],
+        value_pattern: '[ AUTO | <.ecf_file> ]',
+        has_value: true,
+        is_legacy: 'false'
+      }
+    ]);
+
+    expect(catalog.commands[0].variants.map((variant) => variant.name)).toEqual(['ESTRY Control File', 'ESTRY Control File AUTO']);
+    expect(catalog.commands[0].valueSpec).toMatchObject({
+      kinds: ['file', 'option', 'compound'],
+      options: ['AUTO'],
+      extensions: ['.ecf'],
+      placeholders: ['.ecf_file']
+    });
   });
 });

@@ -23,7 +23,8 @@ interface EditorProps {
   problems: Problem[];
   activeLine: number;
   onActiveLineChange: (line: number) => void;
-  requestedLine: { lineNumber: number; nonce: number } | null;
+  requestedLine: { fileId: string; lineNumber: number; nonce: number } | null;
+  onRequestedLineHandled: () => void;
   search: string;
   onSearchChange: (search: string) => void;
 }
@@ -42,6 +43,7 @@ export function Editor({
   activeLine,
   onActiveLineChange,
   requestedLine,
+  onRequestedLineHandled,
   search,
   onSearchChange
 }: EditorProps) {
@@ -68,9 +70,10 @@ export function Editor({
   };
 
   useEffect(() => {
-    if (!requestedLine) return;
+    if (!requestedLine || requestedLine.fileId !== activeFileId) return;
     moveCaretToLine(requestedLine.lineNumber, value, textareaRef, highlightRef, gutterRef, onActiveLineChange, setCursorOffset);
-  }, [requestedLine, onActiveLineChange]);
+    onRequestedLineHandled();
+  }, [requestedLine?.nonce, requestedLine?.fileId, activeFileId]);
 
   useEffect(() => {
     setSelectedSuggestion(0);
@@ -235,17 +238,21 @@ export function Editor({
             onActiveLineChange(nextLine.lineNumber);
             const nextLineText = event.target.value.split('\n')[nextLine.lineNumber - 1] ?? '';
             const nextLinePrefix = nextLineText.slice(0, nextLine.column);
-            setShowSuggest(canShowSuggestions(nextLinePrefix, false));
+            const nextSuggestions = getAutocompleteSuggestions(nextLinePrefix, inputs);
+            setShowSuggest(canShowSuggestions(nextLinePrefix, false, nextSuggestions.length));
           }}
           onClick={() => {
             updateCursorLine();
             setShowSuggest(false);
           }}
+          onSelect={updateCursorLine}
           onKeyDown={handleKeyDown}
           onKeyUp={(event) => {
             updateCursorLine();
             if (event.key === 'Escape') {
               setShowSuggest(false);
+            } else if (showSuggest && isSuggestionNavigationKey(event.key)) {
+              setShowSuggest(true);
             } else if (!isTypingKey(event)) {
               setShowSuggest(false);
             }
@@ -274,12 +281,12 @@ export function Editor({
   );
 }
 
-function canShowSuggestions(linePrefix: string, manual: boolean) {
+function canShowSuggestions(linePrefix: string, manual: boolean, suggestionCount = 1) {
   if (manual) return true;
 
   const assignmentIndex = linePrefix.indexOf('==');
   if (assignmentIndex >= 0) {
-    return linePrefix.slice(assignmentIndex + 2).trim().length > 0;
+    return suggestionCount > 0 && linePrefix.slice(0, assignmentIndex).trim().length > 0;
   }
 
   return linePrefix.trim().length > 0;
@@ -288,6 +295,10 @@ function canShowSuggestions(linePrefix: string, manual: boolean) {
 function isTypingKey(event: KeyboardEvent<HTMLTextAreaElement>) {
   if (event.ctrlKey || event.metaKey || event.altKey) return false;
   return event.key.length === 1 || event.key === 'Backspace' || event.key === 'Delete';
+}
+
+function isSuggestionNavigationKey(key: string) {
+  return key === 'ArrowDown' || key === 'ArrowUp';
 }
 
 function applySuggestion(suggestion: Suggestion, value: string, onChange: (value: string) => void, ref: RefObject<HTMLTextAreaElement | null>) {
@@ -299,9 +310,10 @@ function applySuggestion(suggestion: Suggestion, value: string, onChange: (value
   const current = value.slice(line.start, lineEnd);
   const assignmentIndex = current.indexOf('==');
   const commentMatch = suggestion.kind === 'file' ? current.slice(Math.max(0, assignmentIndex + 2)).match(/\s(?:!|#|\/\/).*/) : null;
+  const isValueSuggestion = assignmentIndex >= 0 && suggestion.kind !== 'command';
   const replacementEnd = commentMatch?.index === undefined ? lineEnd : line.start + assignmentIndex + 2 + commentMatch.index;
-  const replacementStart = suggestion.kind === 'file' && assignmentIndex >= 0 ? line.start + assignmentIndex + 2 : line.start;
-  const prefix = suggestion.kind === 'file' ? ' ' : '';
+  const replacementStart = isValueSuggestion ? line.start + assignmentIndex + 2 : line.start;
+  const prefix = isValueSuggestion ? ' ' : '';
   const insertText = `${prefix}${suggestion.insertText}`;
   const nextValue = `${value.slice(0, replacementStart)}${insertText}${value.slice(replacementEnd)}`;
   const nextCaret = replacementStart + insertText.length;

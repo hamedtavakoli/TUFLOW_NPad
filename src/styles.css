@@ -385,7 +385,7 @@ button:disabled,
 
 .gutter {
   z-index: 3;
-  padding: 12px 0;
+  padding: 12px 0 34px;
   border-right: 1px solid #d7dee5;
   background: #f0f4f7;
   color: #718093;
@@ -436,6 +436,7 @@ button:disabled,
   grid-row: 1;
   margin: 0;
   padding: 12px 14px;
+  padding-bottom: 34px;
   border: 0;
   outline: 0;
   overflow: auto;
@@ -591,6 +592,58 @@ button:disabled,
   overflow: auto;
 }
 
+.problem-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.switch-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #566575;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.switch-control input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.switch-control span {
+  width: 30px;
+  height: 16px;
+  position: relative;
+  border-radius: 999px;
+  background: #cbd4dd;
+  transition: background 0.15s ease;
+}
+
+.switch-control span::after {
+  content: "";
+  width: 12px;
+  height: 12px;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(24, 36, 50, 0.18);
+  transition: transform 0.15s ease;
+}
+
+.switch-control input:checked + span {
+  background: #0d8994;
+}
+
+.switch-control input:checked + span::after {
+  transform: translateX(14px);
+}
+
 .problem-row {
   width: 100%;
   display: grid;
@@ -742,4 +795,24 @@ button:disabled,
   padding: 3px 7px;
   background: #dcecef;
   color: #004f59;
+}
+
+.expected-value {
+  display: grid;
+  gap: 9px;
+}
+
+.expected-value > div {
+  display: grid;
+  gap: 5px;
+}
+
+.expected-value strong {
+  color: #607083;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.expected-value small {
+  color: #637083;
 }

@@ -848,12 +848,12 @@
     },
     {
       "control_file": "TCF",
-      "command_pattern": "ESTRY Control File [ {} | AUTO]",
+      "command_pattern": "ESTRY Control File",
       "command_variants": [
         "ESTRY Control File",
         "ESTRY Control File AUTO"
       ],
-      "value_pattern": "[ {} | AUTO] == ⟨ .ecf_file ⟩ ]",
+      "value_pattern": "[ AUTO | \u27e8 .ecf_file \u27e9 ]",
       "has_value": true,
       "solver": "Classic and HPC",
       "is_legacy": false,
@@ -1758,7 +1758,7 @@
       "command_variants": [
         "If Event"
       ],
-      "value_pattern": "[ ⟨ e1 ⟩ | ⟨ e2 ⟩ | ⟨ e3 ⟩ | … ]",
+      "value_pattern": "[ \u27e8 e1 \u27e9 | \u27e8 e2 \u27e9 | \u27e8 e3 \u27e9 | . ]",
       "has_value": true,
       "solver": "Classic and HPC",
       "is_legacy": false,
@@ -2178,7 +2178,8 @@
       "control_file": "TCF",
       "command_pattern": "Maximums and Minimums",
       "command_variants": [
-        "Maximums and Minimums"
+        "Maximums and Minimums",
+        "Store Maximums and Minimums"
       ],
       "value_pattern": "[ ON | OFF | {ON MAXIMUMS ONLY} ]",
       "has_value": true,
@@ -2278,7 +2279,7 @@
       "command_variants": [
         "MI Projection"
       ],
-      "value_pattern": "[ ⟨ .mif file ⟩ | Projection_line_from_MIF_file ⟩ ]",
+      "value_pattern": "[ \u27e8 .mif_file \u27e9 | \u27e8 Projection_line_from_MIF_file \u27e9 ]",
       "has_value": true,
       "solver": "Classic and HPC",
       "is_legacy": false,
@@ -2999,7 +3000,7 @@
       "command_variants": [
         "Read Materials File"
       ],
-      "value_pattern": "[ ⟨ file ⟩ | [ {1.0} | ⟨ n_factor ⟩ ]",
+      "value_pattern": "[ \u27e8 file \u27e9 | \u27e8 file \u27e9, [ {1.0} | \u27e8 n_factor \u27e9 ] ]",
       "has_value": true,
       "solver": "Classic and HPC",
       "is_legacy": false,

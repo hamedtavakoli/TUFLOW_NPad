@@ -1,3 +1,5 @@
+import type { CommandValueSpec } from './valuePattern';
+
 export type Severity = 'error' | 'warning' | 'info';
 
 export interface TuflowCommand {
@@ -19,6 +21,7 @@ export interface TuflowCommand {
   isLegacy?: boolean;
   syntaxWarnings?: string[];
   tokens?: string[];
+  valueSpec?: CommandValueSpec;
 }
 
 export interface ProjectInput {

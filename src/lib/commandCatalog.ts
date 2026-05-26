@@ -36,6 +36,7 @@ export interface NormalisedTuflowCommand {
   patternTokens: string[];
   variants: NormalisedCommandVariant[];
   valuePattern?: string;
+  valueSpec: CommandValueSpec;
   hasValue: boolean;
   solver?: string;
   isLegacy: boolean;
@@ -113,7 +114,7 @@ function normaliseRecord(record: RawTuflowCommandRecord): NormalisedTuflowComman
     };
   });
 
-  return {
+  const command: NormalisedTuflowCommand = {
     id: `${controlFile}:${normaliseCommandText(commandPattern)}`,
     controlFile,
     commandPattern,
@@ -121,6 +122,7 @@ function normaliseRecord(record: RawTuflowCommandRecord): NormalisedTuflowComman
     patternTokens: commandTokens(commandPattern),
     variants,
     valuePattern,
+    valueSpec: classifyValuePattern(valuePattern, record.has_value ?? Boolean(valuePattern)),
     hasValue: record.has_value ?? Boolean(valuePattern),
     solver: record.solver?.trim() || undefined,
     isLegacy: record.is_legacy === true || record.is_legacy === 'true',
@@ -128,6 +130,8 @@ function normaliseRecord(record: RawTuflowCommandRecord): NormalisedTuflowComman
     sourcePage: record.source_page?.trim() || undefined,
     syntaxWarnings: record.syntax_warnings ?? []
   };
+
+  return command;
 }
 
 function buildCatalog(commands: NormalisedTuflowCommand[]): TuflowCommandCatalog {
@@ -164,3 +168,4 @@ function collapseCommandSpaces(value: string): string {
 function uniqueStrings(values: string[]): string[] {
   return Array.from(new Set(values.map(collapseCommandSpaces).filter(Boolean)));
 }
+import { classifyValuePattern, type CommandValueSpec } from './valuePattern';

@@ -39,6 +39,7 @@ interface OpenFileTab {
   name: string;
   text: string;
   savedText: string;
+  activeLine: number;
   undoStack: string[];
   redoStack: string[];
 }
@@ -48,6 +49,7 @@ const starterFile: OpenFileTab = {
   name: 'model.tcf',
   text: starterText,
   savedText: starterText,
+  activeLine: 1,
   undoStack: [],
   redoStack: []
 };
@@ -58,14 +60,19 @@ function App() {
   const [files, setFiles] = useState<OpenFileTab[]>([starterFile]);
   const [activeFileId, setActiveFileId] = useState(starterFile.id);
   const [inputs, setInputs] = useState<ProjectInput[]>(starterInputs);
-  const [activeLine, setActiveLine] = useState(1);
-  const [requestedLine, setRequestedLine] = useState<{ lineNumber: number; nonce: number } | null>(null);
+  const [requestedLine, setRequestedLine] = useState<{ fileId: string; lineNumber: number; nonce: number } | null>(null);
   const [search, setSearch] = useState('');
+  const [showMissingInputProblems, setShowMissingInputProblems] = useState(false);
 
   const activeFile = files.find((file) => file.id === activeFileId) ?? files[0];
   const text = activeFile?.text ?? '';
+  const activeLine = activeFile?.activeLine ?? 1;
   const hasUnsavedFiles = files.some((file) => file.text !== file.savedText);
-  const problems = useMemo(() => validateTuflowText(text, inputs), [text, inputs]);
+  const allProblems = useMemo(() => validateTuflowText(text, inputs), [text, inputs]);
+  const problems = useMemo(
+    () => (showMissingInputProblems ? allProblems : allProblems.filter((problem) => !problem.id.startsWith('missing-input'))),
+    [allProblems, showMissingInputProblems]
+  );
 
   useEffect(() => {
     const warnBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -128,7 +135,6 @@ function App() {
 
   const selectFile = (id: string) => {
     setActiveFileId(id);
-    setActiveLine(1);
     setRequestedLine(null);
   };
 
@@ -138,16 +144,16 @@ function App() {
       return;
     }
 
-    setFiles((current) => {
-      if (current.length === 1) return current;
-      const nextFiles = current.filter((file) => file.id !== id);
-      if (id === activeFileId) {
-        setActiveFileId(nextFiles.at(-1)?.id ?? nextFiles[0].id);
-        setActiveLine(1);
-        setRequestedLine(null);
-      }
-      return nextFiles;
-    });
+    if (files.length === 1) return;
+
+    const closingIndex = files.findIndex((file) => file.id === id);
+    const nextFiles = files.filter((file) => file.id !== id);
+    const nextActiveId =
+      id === activeFileId ? nextFiles[Math.min(Math.max(closingIndex, 0), nextFiles.length - 1)]?.id ?? nextFiles[0].id : activeFileId;
+
+    setFiles(nextFiles);
+    setActiveFileId(nextActiveId);
+    setRequestedLine(null);
   };
 
   const newFile = () => {
@@ -156,6 +162,7 @@ function App() {
       name: `untitled-${files.length + 1}.tcf`,
       text: '! New TUFLOW control file\n',
       savedText: '',
+      activeLine: 1,
       undoStack: [],
       redoStack: []
     };
@@ -169,8 +176,12 @@ function App() {
   };
   const exportProblems = () => downloadText(`${stripExtension(activeFile.name)}-problems.json`, JSON.stringify(problems, null, 2));
   const goToLine = (line: number) => {
-    setActiveLine(line);
-    setRequestedLine({ lineNumber: line, nonce: Date.now() });
+    setActiveLineForFile(activeFile.id, line);
+    setRequestedLine({ fileId: activeFile.id, lineNumber: line, nonce: Date.now() });
+  };
+
+  const setActiveLineForFile = (fileId: string, line: number) => {
+    setFiles((current) => current.map((file) => (file.id === fileId ? { ...file, activeLine: line } : file)));
   };
 
   return (
@@ -235,12 +246,19 @@ function App() {
             inputs={inputs}
             problems={problems}
             activeLine={activeLine}
-            onActiveLineChange={setActiveLine}
+            onActiveLineChange={(line) => setActiveLineForFile(activeFile.id, line)}
             requestedLine={requestedLine}
+            onRequestedLineHandled={() => setRequestedLine(null)}
             search={search}
             onSearchChange={setSearch}
           />
-          <ProblemsPanel problems={problems} activeLine={activeLine} onSelectLine={goToLine} />
+          <ProblemsPanel
+            problems={problems}
+            activeLine={activeLine}
+            showMissingInputProblems={showMissingInputProblems}
+            onShowMissingInputProblemsChange={setShowMissingInputProblems}
+            onSelectLine={goToLine}
+          />
         </section>
         <CommandHelp activeLine={activeLine} text={text} />
       </main>
@@ -279,6 +297,7 @@ async function readEditorFile(file: File): Promise<OpenFileTab> {
     name: file.name,
     text,
     savedText: text,
+    activeLine: 1,
     undoStack: [],
     redoStack: []
   };

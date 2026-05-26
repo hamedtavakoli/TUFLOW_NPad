@@ -6,11 +6,22 @@ export function getAutocompleteSuggestions(lineText: string, inputs: ProjectInpu
   const assignmentIndex = lineText.indexOf('==');
   if (assignmentIndex >= 0) {
     const commandText = lineText.slice(0, assignmentIndex).trim();
-    const partialReference = lineText.slice(assignmentIndex + 2).trim().replace(/^["']/, '').toLowerCase();
+    const partialValue = lineText.slice(assignmentIndex + 2).trim().replace(/^["']/, '');
+    const partialReference = partialValue.toLowerCase();
     const command = findCommand(commandText);
     const allowedTypes = command?.allowedFileTypes ?? [];
+    const shouldSuggestFiles = !command || command.requiresFileReference || allowedTypes.length > 0;
+    const optionSuggestions =
+      command?.valueSpec?.options
+        .filter((option) => option.toLowerCase().startsWith(partialReference))
+        .map((option) => ({
+          label: option,
+          detail: option === command.valueSpec?.defaultValue ? `Default option - ${command.name}` : `Option - ${command.name}`,
+          insertText: option,
+          kind: 'keyword' as const
+        })) ?? [];
 
-    return inputs
+    const fileSuggestions = shouldSuggestFiles ? inputs
       .filter((input) => {
         const matchesType = allowedTypes.length === 0 || allowedTypes.includes(input.extension);
         const matchesText =
@@ -21,8 +32,16 @@ export function getAutocompleteSuggestions(lineText: string, inputs: ProjectInpu
         label: input.name,
         detail: `${input.type} - ${input.path}`,
         insertText: input.path,
-        kind: 'file'
-      }));
+        kind: 'file' as const
+      })) : [];
+
+    const seen = new Set<string>();
+    return [...optionSuggestions, ...fileSuggestions].filter((suggestion) => {
+      const key = `${suggestion.kind}:${suggestion.label.toLowerCase()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }
 
   const trimmed = lineText.trimStart();
