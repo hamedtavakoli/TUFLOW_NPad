@@ -1,12 +1,24 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
-import { ChevronDown, ChevronUp, Search } from 'lucide-react';
+import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 import { getAutocompleteSuggestions } from '../lib/autocomplete';
 import type { Problem, ProjectInput, Suggestion } from '../lib/types';
 import { highlightTuflowLine } from '../tuflow/editor/tuflowHighlighter';
 
+interface EditorFileTab {
+  id: string;
+  name: string;
+  isDirty: boolean;
+}
+
 interface EditorProps {
   value: string;
   onChange: (value: string) => void;
+  fileTabs: EditorFileTab[];
+  activeFileId: string;
+  onSelectFile: (id: string) => void;
+  onCloseFile: (id: string) => void;
+  onUndo: () => void;
+  onRedo: () => void;
   inputs: ProjectInput[];
   problems: Problem[];
   activeLine: number;
@@ -16,7 +28,23 @@ interface EditorProps {
   onSearchChange: (search: string) => void;
 }
 
-export function Editor({ value, onChange, inputs, problems, activeLine, onActiveLineChange, requestedLine, search, onSearchChange }: EditorProps) {
+export function Editor({
+  value,
+  onChange,
+  fileTabs,
+  activeFileId,
+  onSelectFile,
+  onCloseFile,
+  onUndo,
+  onRedo,
+  inputs,
+  problems,
+  activeLine,
+  onActiveLineChange,
+  requestedLine,
+  search,
+  onSearchChange
+}: EditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLPreElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
@@ -36,7 +64,7 @@ export function Editor({ value, onChange, inputs, problems, activeLine, onActive
     const textarea = textareaRef.current;
     if (!textarea) return;
     setCursorOffset(textarea.selectionStart);
-    onActiveLineChange(value.slice(0, textarea.selectionStart).split('\n').length);
+    onActiveLineChange(getLineAtOffset(textarea.value, textarea.selectionStart).lineNumber);
   };
 
   useEffect(() => {
@@ -68,6 +96,30 @@ export function Editor({ value, onChange, inputs, problems, activeLine, onActive
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+      event.preventDefault();
+      if (event.shiftKey) {
+        onRedo();
+      } else {
+        onUndo();
+      }
+      setShowSuggest(false);
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
+      event.preventDefault();
+      onRedo();
+      setShowSuggest(false);
+      return;
+    }
+
+    if (event.ctrlKey && event.key === ' ') {
+      event.preventDefault();
+      setShowSuggest(canShowSuggestions(currentLinePrefix, true));
+      return;
+    }
+
     if (!showSuggest || suggestions.length === 0) return;
     if (event.key === 'ArrowDown') {
       event.preventDefault();
@@ -87,7 +139,48 @@ export function Editor({ value, onChange, inputs, problems, activeLine, onActive
   return (
     <section className="editor-wrap">
       <div className="editor-topline">
-        <div className="file-tab">model.tcf</div>
+        <div className="file-tabs" role="tablist" aria-label="Open files">
+          {fileTabs.map((file) => (
+            <div
+              className={`file-tab ${file.id === activeFileId ? 'active' : ''}`}
+              key={file.id}
+              role="tab"
+              tabIndex={0}
+              aria-selected={file.id === activeFileId}
+              onClick={() => onSelectFile(file.id)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onSelectFile(file.id);
+                }
+              }}
+              title={file.name}
+            >
+              <span>{file.name}</span>
+              {file.isDirty ? <i className="dirty-dot" title="Unsaved changes" /> : null}
+              {fileTabs.length > 1 ? (
+                <button
+                  className="tab-close"
+                  type="button"
+                  title={`Close ${file.name}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onCloseFile(file.id);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onCloseFile(file.id);
+                    }
+                  }}
+                >
+                  <X size={13} />
+                </button>
+              ) : null}
+            </div>
+          ))}
+        </div>
         <label className="search-box">
           <Search size={15} />
           <input value={search} onChange={(event) => onSearchChange(event.target.value)} onKeyDown={(event) => {
@@ -134,17 +227,30 @@ export function Editor({ value, onChange, inputs, problems, activeLine, onActive
           ref={textareaRef}
           value={value}
           spellCheck={false}
+          wrap="off"
           onChange={(event) => {
             onChange(event.target.value);
             setCursorOffset(event.target.selectionStart);
+            const nextLine = getLineAtOffset(event.target.value, event.target.selectionStart);
+            onActiveLineChange(nextLine.lineNumber);
+            const nextLineText = event.target.value.split('\n')[nextLine.lineNumber - 1] ?? '';
+            const nextLinePrefix = nextLineText.slice(0, nextLine.column);
+            setShowSuggest(canShowSuggestions(nextLinePrefix, false));
           }}
-          onClick={updateCursorLine}
+          onClick={() => {
+            updateCursorLine();
+            setShowSuggest(false);
+          }}
           onKeyDown={handleKeyDown}
           onKeyUp={(event) => {
             updateCursorLine();
-            setShowSuggest(!['Escape'].includes(event.key));
+            if (event.key === 'Escape') {
+              setShowSuggest(false);
+            } else if (!isTypingKey(event)) {
+              setShowSuggest(false);
+            }
           }}
-          onFocus={() => setShowSuggest(true)}
+          onFocus={() => setShowSuggest(false)}
           onScroll={(event) => {
             syncScroll(event.currentTarget, highlightRef, gutterRef);
           }}
@@ -166,6 +272,22 @@ export function Editor({ value, onChange, inputs, problems, activeLine, onActive
       </div>
     </section>
   );
+}
+
+function canShowSuggestions(linePrefix: string, manual: boolean) {
+  if (manual) return true;
+
+  const assignmentIndex = linePrefix.indexOf('==');
+  if (assignmentIndex >= 0) {
+    return linePrefix.slice(assignmentIndex + 2).trim().length > 0;
+  }
+
+  return linePrefix.trim().length > 0;
+}
+
+function isTypingKey(event: KeyboardEvent<HTMLTextAreaElement>) {
+  if (event.ctrlKey || event.metaKey || event.altKey) return false;
+  return event.key.length === 1 || event.key === 'Backspace' || event.key === 'Delete';
 }
 
 function applySuggestion(suggestion: Suggestion, value: string, onChange: (value: string) => void, ref: RefObject<HTMLTextAreaElement | null>) {

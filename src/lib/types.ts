@@ -11,6 +11,14 @@ export interface TuflowCommand {
   requiresFileReference: boolean;
   aliases: string[];
   duplicatePolicy?: 'allow' | 'warn';
+  controlFile?: string;
+  commandPattern?: string;
+  sourceUrl?: string;
+  sourcePage?: string;
+  solver?: string;
+  isLegacy?: boolean;
+  syntaxWarnings?: string[];
+  tokens?: string[];
 }
 
 export interface ProjectInput {

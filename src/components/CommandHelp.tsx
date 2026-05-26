@@ -1,4 +1,6 @@
+import { ExternalLink } from 'lucide-react';
 import { findCommand } from '../lib/commands';
+import { highlightTuflowLine } from '../tuflow/editor/tuflowHighlighter';
 
 interface CommandHelpProps {
   activeLine: number;
@@ -20,13 +22,24 @@ export function CommandHelp({ activeLine, text }: CommandHelpProps) {
       </div>
       {command ? (
         <div className="help-card">
-          <span className="category-pill">{command.category}</span>
+          <div className="help-command-top">
+            <div className="help-pills">
+              <span className="category-pill">{command.category}</span>
+              {command.isLegacy ? <span className="legacy-pill">Legacy</span> : null}
+            </div>
+            {command.sourceUrl ? (
+              <a className="docs-link" href={command.sourceUrl} target="_blank" rel="noreferrer" title="Open TUFLOW documentation">
+                <ExternalLink size={14} />
+                Docs
+              </a>
+            ) : null}
+          </div>
           <h3>{command.name}</h3>
-          <code>{command.syntax}</code>
+          <pre className="help-syntax">{highlightTuflowLine(command.syntax, '')}</pre>
           <p>{command.description}</p>
           {command.allowedFileTypes.length > 0 ? (
             <>
-              <h4>Expected files</h4>
+              <h4>Expected value</h4>
               <div className="extension-list">
                 {command.allowedFileTypes.map((extension) => (
                   <span key={extension}>{extension}</span>
@@ -34,11 +47,9 @@ export function CommandHelp({ activeLine, text }: CommandHelpProps) {
               </div>
             </>
           ) : null}
-          <h4>Example</h4>
-          <pre>{command.examples[0]}</pre>
         </div>
       ) : (
-        <div className="empty-state">Select a known command to see syntax, examples, and expected input types.</div>
+        <div className="empty-state">Select a known command to see syntax, documentation, and expected values.</div>
       )}
     </aside>
   );

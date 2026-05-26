@@ -1,3 +1,5 @@
+import { getTuflowCommandTokenWords } from '../../lib/commands';
+
 const nppTuflowKeywordXml = `
 <KeywordLists>
 <Keywords name="Keywords1">==</Keywords>
@@ -11,12 +13,13 @@ export interface NotepadPlusKeywordGroups {
 }
 
 const nppKeywordGroups = parseNotepadPlusKeywordXml(nppTuflowKeywordXml);
+const catalogKeywordWords = getTuflowCommandTokenWords();
 
 export const tuflowLanguageRules = {
   caseInsensitive: true,
   lineCommentPrefixes: ['!', '#', '//'],
   operators: nppKeywordGroups.operators,
-  keywords: nppKeywordGroups.keywords,
+  keywords: uniqueWords([...nppKeywordGroups.keywords, ...catalogKeywordWords].join(' ')),
   commandLeadWords: [
     'BC',
     'Cell',

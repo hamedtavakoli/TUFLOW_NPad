@@ -16,10 +16,11 @@ export function validateParsedLines(lines: ParsedLine[], inputs: ProjectInput[])
       continue;
     }
 
+    const exactCommand = line.hasAssignment ? findCommand(line.commandText) : undefined;
     const looseCommand = !line.hasAssignment ? findCommandInLooseLine(line.commandText) : undefined;
-    const tokenCheck = checkTuflowCommandTokens(looseCommand?.name ?? line.commandText);
-    const command = findCommand(tokenCheck.normalisedCommand) ?? looseCommand;
-    if (tokenCheck.unknownTokens.length > 0) {
+    const command = exactCommand ?? looseCommand;
+    const tokenCheck = checkTuflowCommandTokens(command?.name ?? line.commandText);
+    if (!command && tokenCheck.unknownTokens.length > 0) {
       problems.push({
         id: `command-token-${line.lineNumber}`,
         lineNumber: line.lineNumber,
