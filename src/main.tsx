@@ -40,6 +40,11 @@ interface OpenFileTab {
   text: string;
   savedText: string;
   activeLine: number;
+  cursorOffset: number;
+  selectionStart: number;
+  selectionEnd: number;
+  scrollTop: number;
+  scrollLeft: number;
   undoStack: string[];
   redoStack: string[];
 }
@@ -50,6 +55,11 @@ const starterFile: OpenFileTab = {
   text: starterText,
   savedText: starterText,
   activeLine: 1,
+  cursorOffset: 0,
+  selectionStart: 0,
+  selectionEnd: 0,
+  scrollTop: 0,
+  scrollLeft: 0,
   undoStack: [],
   redoStack: []
 };
@@ -163,6 +173,11 @@ function App() {
       text: '! New TUFLOW control file\n',
       savedText: '',
       activeLine: 1,
+      cursorOffset: 0,
+      selectionStart: 0,
+      selectionEnd: 0,
+      scrollTop: 0,
+      scrollLeft: 0,
       undoStack: [],
       redoStack: []
     };
@@ -182,6 +197,29 @@ function App() {
 
   const setActiveLineForFile = (fileId: string, line: number) => {
     setFiles((current) => current.map((file) => (file.id === fileId ? { ...file, activeLine: line } : file)));
+  };
+
+  const setViewStateForFile = (
+    fileId: string,
+    viewState: Pick<OpenFileTab, 'activeLine' | 'cursorOffset' | 'selectionStart' | 'selectionEnd' | 'scrollTop' | 'scrollLeft'>
+  ) => {
+    setFiles((current) =>
+      current.map((file) => {
+        if (file.id !== fileId) return file;
+        const next = {
+          ...file,
+          ...viewState
+        };
+        return file.activeLine === next.activeLine &&
+          file.cursorOffset === next.cursorOffset &&
+          file.selectionStart === next.selectionStart &&
+          file.selectionEnd === next.selectionEnd &&
+          file.scrollTop === next.scrollTop &&
+          file.scrollLeft === next.scrollLeft
+          ? file
+          : next;
+      })
+    );
   };
 
   return (
@@ -247,6 +285,14 @@ function App() {
             problems={problems}
             activeLine={activeLine}
             onActiveLineChange={(line) => setActiveLineForFile(activeFile.id, line)}
+            viewState={{
+              cursorOffset: activeFile.cursorOffset,
+              selectionStart: activeFile.selectionStart,
+              selectionEnd: activeFile.selectionEnd,
+              scrollTop: activeFile.scrollTop,
+              scrollLeft: activeFile.scrollLeft
+            }}
+            onViewStateChange={(viewState) => setViewStateForFile(activeFile.id, viewState)}
             requestedLine={requestedLine}
             onRequestedLineHandled={() => setRequestedLine(null)}
             search={search}
@@ -298,6 +344,11 @@ async function readEditorFile(file: File): Promise<OpenFileTab> {
     text,
     savedText: text,
     activeLine: 1,
+    cursorOffset: 0,
+    selectionStart: 0,
+    selectionEnd: 0,
+    scrollTop: 0,
+    scrollLeft: 0,
     undoStack: [],
     redoStack: []
   };

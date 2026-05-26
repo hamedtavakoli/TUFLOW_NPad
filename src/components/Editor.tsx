@@ -23,10 +23,20 @@ interface EditorProps {
   problems: Problem[];
   activeLine: number;
   onActiveLineChange: (line: number) => void;
+  viewState: EditorViewState;
+  onViewStateChange: (viewState: EditorViewState & { activeLine: number }) => void;
   requestedLine: { fileId: string; lineNumber: number; nonce: number } | null;
   onRequestedLineHandled: () => void;
   search: string;
   onSearchChange: (search: string) => void;
+}
+
+interface EditorViewState {
+  cursorOffset: number;
+  selectionStart: number;
+  selectionEnd: number;
+  scrollTop: number;
+  scrollLeft: number;
 }
 
 export function Editor({
@@ -42,6 +52,8 @@ export function Editor({
   problems,
   activeLine,
   onActiveLineChange,
+  viewState,
+  onViewStateChange,
   requestedLine,
   onRequestedLineHandled,
   search,
@@ -62,18 +74,53 @@ export function Editor({
   const suggestionTop = 12 + Math.max(0, currentLine.lineNumber - 1) * 22 - (textareaRef.current?.scrollTop ?? 0);
   const suggestionLeft = 72 + Math.min(currentLine.column * 8.4, 520) - (textareaRef.current?.scrollLeft ?? 0);
 
-  const updateCursorLine = () => {
+  const captureViewState = () => {
     const textarea = textareaRef.current;
     if (!textarea) return;
+    const nextLine = getLineAtOffset(textarea.value, textarea.selectionStart).lineNumber;
     setCursorOffset(textarea.selectionStart);
-    onActiveLineChange(getLineAtOffset(textarea.value, textarea.selectionStart).lineNumber);
+    onActiveLineChange(nextLine);
+    onViewStateChange({
+      activeLine: nextLine,
+      cursorOffset: textarea.selectionStart,
+      selectionStart: textarea.selectionStart,
+      selectionEnd: textarea.selectionEnd,
+      scrollTop: textarea.scrollTop,
+      scrollLeft: textarea.scrollLeft
+    });
   };
 
   useEffect(() => {
     if (!requestedLine || requestedLine.fileId !== activeFileId) return;
-    moveCaretToLine(requestedLine.lineNumber, value, textareaRef, highlightRef, gutterRef, onActiveLineChange, setCursorOffset);
+    moveCaretToLine(
+      requestedLine.lineNumber,
+      value,
+      textareaRef,
+      highlightRef,
+      gutterRef,
+      onActiveLineChange,
+      setCursorOffset,
+      onViewStateChange
+    );
     onRequestedLineHandled();
   }, [requestedLine?.nonce, requestedLine?.fileId, activeFileId]);
+
+  useEffect(() => {
+    if (requestedLine && requestedLine.fileId === activeFileId) return;
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    requestAnimationFrame(() => {
+      const safeStart = Math.min(Math.max(viewState.selectionStart, 0), textarea.value.length);
+      const safeEnd = Math.min(Math.max(viewState.selectionEnd, safeStart), textarea.value.length);
+      textarea.setSelectionRange(safeStart, safeEnd);
+      textarea.scrollTop = viewState.scrollTop;
+      textarea.scrollLeft = viewState.scrollLeft;
+      syncScroll(textarea, highlightRef, gutterRef);
+      setCursorOffset(safeStart);
+      onActiveLineChange(getLineAtOffset(textarea.value, safeStart).lineNumber);
+    });
+  }, [activeFileId]);
 
   useEffect(() => {
     setSelectedSuggestion(0);
@@ -95,7 +142,7 @@ export function Editor({
     textarea.setSelectionRange(wrappedIndex, wrappedIndex + query.length);
     textarea.scrollTop = Math.max(0, getLineAtOffset(value, wrappedIndex).lineNumber - 3) * 22;
     syncScroll(textarea, highlightRef, gutterRef);
-    updateCursorLine();
+    captureViewState();
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -236,19 +283,27 @@ export function Editor({
             setCursorOffset(event.target.selectionStart);
             const nextLine = getLineAtOffset(event.target.value, event.target.selectionStart);
             onActiveLineChange(nextLine.lineNumber);
+            onViewStateChange({
+              activeLine: nextLine.lineNumber,
+              cursorOffset: event.target.selectionStart,
+              selectionStart: event.target.selectionStart,
+              selectionEnd: event.target.selectionEnd,
+              scrollTop: event.target.scrollTop,
+              scrollLeft: event.target.scrollLeft
+            });
             const nextLineText = event.target.value.split('\n')[nextLine.lineNumber - 1] ?? '';
             const nextLinePrefix = nextLineText.slice(0, nextLine.column);
             const nextSuggestions = getAutocompleteSuggestions(nextLinePrefix, inputs);
             setShowSuggest(canShowSuggestions(nextLinePrefix, false, nextSuggestions.length));
           }}
           onClick={() => {
-            updateCursorLine();
+            captureViewState();
             setShowSuggest(false);
           }}
-          onSelect={updateCursorLine}
+          onSelect={captureViewState}
           onKeyDown={handleKeyDown}
           onKeyUp={(event) => {
-            updateCursorLine();
+            captureViewState();
             if (event.key === 'Escape') {
               setShowSuggest(false);
             } else if (showSuggest && isSuggestionNavigationKey(event.key)) {
@@ -260,6 +315,7 @@ export function Editor({
           onFocus={() => setShowSuggest(false)}
           onScroll={(event) => {
             syncScroll(event.currentTarget, highlightRef, gutterRef);
+            captureViewState();
           }}
           className="code-input"
         />
@@ -343,7 +399,8 @@ function moveCaretToLine(
   highlightRef: RefObject<HTMLPreElement | null>,
   gutterRef: RefObject<HTMLDivElement | null>,
   onActiveLineChange: (line: number) => void,
-  onCursorOffsetChange: (offset: number) => void
+  onCursorOffsetChange: (offset: number) => void,
+  onViewStateChange: (viewState: EditorViewState & { activeLine: number }) => void
 ) {
   const textarea = ref.current;
   if (!textarea) return;
@@ -356,6 +413,14 @@ function moveCaretToLine(
   syncScroll(textarea, highlightRef, gutterRef);
   onCursorOffsetChange(offset);
   onActiveLineChange(safeLine);
+  onViewStateChange({
+    activeLine: safeLine,
+    cursorOffset: offset,
+    selectionStart: offset,
+    selectionEnd: offset,
+    scrollTop: textarea.scrollTop,
+    scrollLeft: textarea.scrollLeft
+  });
 }
 
 function syncScroll(textarea: HTMLTextAreaElement, highlightRef: RefObject<HTMLPreElement | null>, gutterRef: RefObject<HTMLDivElement | null>) {
