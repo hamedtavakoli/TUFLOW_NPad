@@ -13,6 +13,11 @@
   --syntax-brown: #804000;
   --syntax-text: #1f2a36;
   --syntax-search: #fff0a8;
+  --editor-font-size: 14px;
+  --editor-line-height: 22px;
+  --editor-pad-y: 12px;
+  --editor-pad-x: 14px;
+  --editor-bottom-pad: 34px;
 }
 
 * {
@@ -383,21 +388,42 @@ button:disabled,
   background: #fbfcfd;
 }
 
+.cm-code-frame {
+  display: block;
+  background: #fbfcfd;
+}
+
+.cm-code-frame .cm-editor {
+  height: 100%;
+}
+
+.cm-code-frame .cm-focused {
+  outline: 0;
+}
+
+.cm-problem-line.error {
+  background: rgba(211, 49, 49, 0.08);
+}
+
+.cm-problem-line.warning {
+  background: rgba(217, 132, 0, 0.1);
+}
+
 .gutter {
   z-index: 3;
-  padding: 12px 0 34px;
+  padding: var(--editor-pad-y) 0 var(--editor-bottom-pad);
   border-right: 1px solid #d7dee5;
   background: #f0f4f7;
   color: #718093;
   font-family: "Cascadia Mono", Consolas, monospace;
   font-size: 13px;
-  line-height: 22px;
+  line-height: var(--editor-line-height);
   user-select: none;
   overflow: hidden;
 }
 
 .gutter-line {
-  height: 22px;
+  height: var(--editor-line-height);
   display: grid;
   grid-template-columns: 1fr 12px;
   align-items: center;
@@ -435,8 +461,8 @@ button:disabled,
   grid-column: 2;
   grid-row: 1;
   margin: 0;
-  padding: 12px 14px;
-  padding-bottom: 34px;
+  padding: var(--editor-pad-y) var(--editor-pad-x);
+  padding-bottom: var(--editor-bottom-pad);
   border: 0;
   outline: 0;
   overflow: auto;
@@ -445,8 +471,9 @@ button:disabled,
   word-break: normal;
   tab-size: 2;
   font-family: "Cascadia Mono", Consolas, monospace;
-  font-size: 14px;
-  line-height: 22px;
+  font-size: var(--editor-font-size);
+  line-height: var(--editor-line-height);
+  box-sizing: border-box;
 }
 
 .highlight-layer {
@@ -457,7 +484,8 @@ button:disabled,
 
 .code-line {
   display: block;
-  min-height: 22px;
+  height: var(--editor-line-height);
+  min-height: var(--editor-line-height);
 }
 
 .code-line.error {

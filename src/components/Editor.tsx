@@ -1,13 +1,37 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
 import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
+import { autocompletion, type Completion, type CompletionContext } from '@codemirror/autocomplete';
+import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import { Compartment, EditorState } from '@codemirror/state';
+import {
+  Decoration,
+  EditorView,
+  ViewPlugin,
+  type DecorationSet,
+  type ViewUpdate,
+  drawSelection,
+  highlightActiveLine,
+  highlightActiveLineGutter,
+  keymap,
+  lineNumbers
+} from '@codemirror/view';
 import { getAutocompleteSuggestions } from '../lib/autocomplete';
 import type { Problem, ProjectInput, Suggestion } from '../lib/types';
-import { highlightTuflowLine } from '../tuflow/editor/tuflowHighlighter';
+import { parseTuflowLine } from '../tuflow/parser/tuflowParser';
+import { tokenizeTuflowLine } from '../tuflow/editor/tuflowHighlighter';
 
 interface EditorFileTab {
   id: string;
   name: string;
   isDirty: boolean;
+}
+
+interface EditorViewState {
+  cursorOffset: number;
+  selectionStart: number;
+  selectionEnd: number;
+  scrollTop: number;
+  scrollLeft: number;
 }
 
 interface EditorProps {
@@ -31,13 +55,9 @@ interface EditorProps {
   onSearchChange: (search: string) => void;
 }
 
-interface EditorViewState {
-  cursorOffset: number;
-  selectionStart: number;
-  selectionEnd: number;
-  scrollTop: number;
-  scrollLeft: number;
-}
+const problemCompartment = new Compartment();
+const inputCompartment = new Compartment();
+const searchCompartment = new Compartment();
 
 export function Editor({
   value,
@@ -50,7 +70,6 @@ export function Editor({
   onRedo,
   inputs,
   problems,
-  activeLine,
   onActiveLineChange,
   viewState,
   onViewStateChange,
@@ -59,131 +78,159 @@ export function Editor({
   search,
   onSearchChange
 }: EditorProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const highlightRef = useRef<HTMLPreElement>(null);
-  const gutterRef = useRef<HTMLDivElement>(null);
-  const [showSuggest, setShowSuggest] = useState(false);
-  const [selectedSuggestion, setSelectedSuggestion] = useState(0);
-  const [cursorOffset, setCursorOffset] = useState(0);
-  const lines = value.split('\n');
-  const currentLine = getLineAtOffset(value, cursorOffset);
-  const currentLineText = lines[currentLine.lineNumber - 1] ?? '';
-  const currentLinePrefix = currentLineText.slice(0, currentLine.column);
-  const suggestions = useMemo(() => getAutocompleteSuggestions(currentLinePrefix, inputs).slice(0, 8), [currentLinePrefix, inputs]);
-  const problemLines = new Map(problems.map((problem) => [problem.lineNumber, problem]));
-  const suggestionTop = 12 + Math.max(0, currentLine.lineNumber - 1) * 22 - (textareaRef.current?.scrollTop ?? 0);
-  const suggestionLeft = 72 + Math.min(currentLine.column * 8.4, 520) - (textareaRef.current?.scrollLeft ?? 0);
+  const hostRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<EditorView | null>(null);
+  const activeFileRef = useRef(activeFileId);
+  const onChangeRef = useRef(onChange);
+  const onActiveLineChangeRef = useRef(onActiveLineChange);
+  const onViewStateChangeRef = useRef(onViewStateChange);
+  const valueRef = useRef(value);
 
-  const captureViewState = () => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const nextLine = getLineAtOffset(textarea.value, textarea.selectionStart).lineNumber;
-    setCursorOffset(textarea.selectionStart);
-    onActiveLineChange(nextLine);
-    onViewStateChange({
-      activeLine: nextLine,
-      cursorOffset: textarea.selectionStart,
-      selectionStart: textarea.selectionStart,
-      selectionEnd: textarea.selectionEnd,
-      scrollTop: textarea.scrollTop,
-      scrollLeft: textarea.scrollLeft
-    });
-  };
+  onChangeRef.current = onChange;
+  onActiveLineChangeRef.current = onActiveLineChange;
+  onViewStateChangeRef.current = onViewStateChange;
+  valueRef.current = value;
+
+  const problemLines = useMemo(() => new Map(problems.map((problem) => [problem.lineNumber, problem])), [problems]);
 
   useEffect(() => {
-    if (!requestedLine || requestedLine.fileId !== activeFileId) return;
-    moveCaretToLine(
-      requestedLine.lineNumber,
-      value,
-      textareaRef,
-      highlightRef,
-      gutterRef,
-      onActiveLineChange,
-      setCursorOffset,
-      onViewStateChange
-    );
-    onRequestedLineHandled();
-  }, [requestedLine?.nonce, requestedLine?.fileId, activeFileId]);
+    if (!hostRef.current || viewRef.current) return;
+
+    const view = new EditorView({
+      parent: hostRef.current,
+      state: EditorState.create({
+        doc: value,
+        extensions: [
+          lineNumbers(),
+          highlightActiveLine(),
+          highlightActiveLineGutter(),
+          drawSelection(),
+          history(),
+          keymap.of([...defaultKeymap, ...historyKeymap]),
+          tuflowSyntaxDecorations(),
+          problemCompartment.of(problemDecorations(problemLines)),
+          inputCompartment.of(autocompleteFromInputs(inputs)),
+          searchCompartment.of(searchDecorations(search)),
+          EditorView.updateListener.of((update) => {
+            if (update.docChanged) {
+              onChangeRef.current(update.state.doc.toString());
+            }
+            if (update.docChanged || update.selectionSet || update.viewportChanged) {
+              captureCodeMirrorViewState(update.view, onActiveLineChangeRef.current, onViewStateChangeRef.current);
+            }
+          }),
+          EditorView.theme({
+            '&': { height: '100%' },
+            '.cm-scroller': {
+              fontFamily: '"Cascadia Mono", Consolas, monospace',
+              fontSize: '14px',
+              lineHeight: '22px',
+              overflow: 'auto'
+            },
+            '.cm-content': {
+              padding: '12px 14px 34px'
+            },
+            '.cm-gutters': {
+              backgroundColor: '#f0f4f7',
+              color: '#718093',
+              borderRight: '1px solid #d7dee5'
+            },
+            '.cm-activeLine': {
+              backgroundColor: '#eaf5f6'
+            },
+            '.cm-activeLineGutter': {
+              backgroundColor: '#dcecef',
+              color: '#003f47',
+              fontWeight: '700'
+            },
+            '.cm-selectionBackground': {
+              backgroundColor: 'rgba(13, 137, 148, 0.22) !important'
+            },
+            '.cm-tooltip': {
+              border: '1px solid #b8c4cf',
+              borderRadius: '8px',
+              boxShadow: '0 18px 40px rgba(24, 36, 50, 0.16)',
+              overflow: 'hidden'
+            }
+          })
+        ]
+      })
+    });
+
+    viewRef.current = view;
+    view.scrollDOM.addEventListener('scroll', () => captureCodeMirrorViewState(view, onActiveLineChangeRef.current, onViewStateChangeRef.current));
+    restoreCodeMirrorViewState(view, viewState, onActiveLineChange);
+
+    return () => {
+      view.destroy();
+      viewRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
-    if (requestedLine && requestedLine.fileId === activeFileId) return;
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    requestAnimationFrame(() => {
-      const safeStart = Math.min(Math.max(viewState.selectionStart, 0), textarea.value.length);
-      const safeEnd = Math.min(Math.max(viewState.selectionEnd, safeStart), textarea.value.length);
-      textarea.setSelectionRange(safeStart, safeEnd);
-      textarea.scrollTop = viewState.scrollTop;
-      textarea.scrollLeft = viewState.scrollLeft;
-      syncScroll(textarea, highlightRef, gutterRef);
-      setCursorOffset(safeStart);
-      onActiveLineChange(getLineAtOffset(textarea.value, safeStart).lineNumber);
-    });
+    const view = viewRef.current;
+    if (!view || activeFileRef.current === activeFileId) return;
+    activeFileRef.current = activeFileId;
+    replaceDocument(view, value);
+    requestAnimationFrame(() => restoreCodeMirrorViewState(view, viewState, onActiveLineChange));
   }, [activeFileId]);
 
   useEffect(() => {
-    setSelectedSuggestion(0);
-  }, [currentLinePrefix]);
+    const view = viewRef.current;
+    if (!view || view.state.doc.toString() === value) return;
+    replaceDocument(view, value);
+  }, [value]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({ effects: problemCompartment.reconfigure(problemDecorations(problemLines)) });
+  }, [problemLines]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({ effects: inputCompartment.reconfigure(autocompleteFromInputs(inputs)) });
+  }, [inputs]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({ effects: searchCompartment.reconfigure(searchDecorations(search)) });
+  }, [search]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !requestedLine || requestedLine.fileId !== activeFileId) return;
+    const line = view.state.doc.line(Math.min(Math.max(requestedLine.lineNumber, 1), view.state.doc.lines));
+    view.dispatch({
+      selection: { anchor: line.from },
+      effects: EditorView.scrollIntoView(line.from, { y: 'center' })
+    });
+    captureCodeMirrorViewState(view, onActiveLineChange, onViewStateChange);
+    onRequestedLineHandled();
+  }, [requestedLine?.nonce, requestedLine?.fileId, activeFileId]);
 
   const moveToSearchMatch = (direction: 1 | -1) => {
+    const view = viewRef.current;
     const query = search.trim();
-    const textarea = textareaRef.current;
-    if (!query || !textarea) return;
+    if (!view || !query) return;
 
-    const haystack = value.toLowerCase();
+    const text = view.state.doc.toString();
+    const haystack = text.toLowerCase();
     const needle = query.toLowerCase();
-    const start = direction > 0 ? textarea.selectionEnd : Math.max(0, textarea.selectionStart - 1);
+    const selection = view.state.selection.main;
+    const start = direction > 0 ? selection.to : Math.max(0, selection.from - 1);
     const index = direction > 0 ? haystack.indexOf(needle, start) : haystack.lastIndexOf(needle, start);
     const wrappedIndex = index >= 0 ? index : direction > 0 ? haystack.indexOf(needle) : haystack.lastIndexOf(needle);
     if (wrappedIndex < 0) return;
 
-    textarea.focus();
-    textarea.setSelectionRange(wrappedIndex, wrappedIndex + query.length);
-    textarea.scrollTop = Math.max(0, getLineAtOffset(value, wrappedIndex).lineNumber - 3) * 22;
-    syncScroll(textarea, highlightRef, gutterRef);
-    captureViewState();
-  };
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
-      event.preventDefault();
-      if (event.shiftKey) {
-        onRedo();
-      } else {
-        onUndo();
-      }
-      setShowSuggest(false);
-      return;
-    }
-
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
-      event.preventDefault();
-      onRedo();
-      setShowSuggest(false);
-      return;
-    }
-
-    if (event.ctrlKey && event.key === ' ') {
-      event.preventDefault();
-      setShowSuggest(canShowSuggestions(currentLinePrefix, true));
-      return;
-    }
-
-    if (!showSuggest || suggestions.length === 0) return;
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      setSelectedSuggestion((current) => (current + 1) % suggestions.length);
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      setSelectedSuggestion((current) => (current - 1 + suggestions.length) % suggestions.length);
-    } else if (event.key === 'Enter' || event.key === 'Tab') {
-      event.preventDefault();
-      applySuggestion(suggestions[selectedSuggestion], value, onChange, textareaRef);
-      setShowSuggest(false);
-    } else if (event.key === 'Escape') {
-      setShowSuggest(false);
-    }
+    view.focus();
+    view.dispatch({
+      selection: { anchor: wrappedIndex, head: wrappedIndex + query.length },
+      effects: EditorView.scrollIntoView(wrappedIndex, { y: 'center' })
+    });
+    captureCodeMirrorViewState(view, onActiveLineChange, onViewStateChange);
   };
 
   return (
@@ -198,7 +245,7 @@ export function Editor({
               tabIndex={0}
               aria-selected={file.id === activeFileId}
               onClick={() => onSelectFile(file.id)}
-              onKeyDown={(event) => {
+              onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
                 if (event.key === 'Enter' || event.key === ' ') {
                   event.preventDefault();
                   onSelectFile(file.id);
@@ -247,188 +294,155 @@ export function Editor({
           </button>
         </label>
       </div>
-      <div className="code-frame">
-        <div className="gutter" aria-hidden="true" ref={gutterRef}>
-          {lines.map((_, index) => {
-            const lineNumber = index + 1;
-            const problem = problemLines.get(lineNumber);
-            return (
-              <div className={`gutter-line ${activeLine === lineNumber ? 'active' : ''}`} key={lineNumber}>
-                <span>{lineNumber}</span>
-                {problem ? <i className={`marker ${problem.severity}`} title={problem.message} /> : null}
-              </div>
-            );
-          })}
-        </div>
-        <pre className="highlight-layer" aria-hidden="true" ref={highlightRef}>
-          {lines.map((line, index) => (
-            <span className={`code-line ${problemLines.get(index + 1)?.severity ?? ''}`} key={`${index}-${line}`}>
-              {problemLines.get(index + 1) ? (
-                <span className={`tok-problem ${problemLines.get(index + 1)?.severity}`}>
-                  {highlightTuflowLine(line, search, index + 1)}
-                </span>
-              ) : (
-                highlightTuflowLine(line, search, index + 1)
-              )}
-            </span>
-          ))}
-        </pre>
-        <textarea
-          ref={textareaRef}
-          value={value}
-          spellCheck={false}
-          wrap="off"
-          onChange={(event) => {
-            onChange(event.target.value);
-            setCursorOffset(event.target.selectionStart);
-            const nextLine = getLineAtOffset(event.target.value, event.target.selectionStart);
-            onActiveLineChange(nextLine.lineNumber);
-            onViewStateChange({
-              activeLine: nextLine.lineNumber,
-              cursorOffset: event.target.selectionStart,
-              selectionStart: event.target.selectionStart,
-              selectionEnd: event.target.selectionEnd,
-              scrollTop: event.target.scrollTop,
-              scrollLeft: event.target.scrollLeft
-            });
-            const nextLineText = event.target.value.split('\n')[nextLine.lineNumber - 1] ?? '';
-            const nextLinePrefix = nextLineText.slice(0, nextLine.column);
-            const nextSuggestions = getAutocompleteSuggestions(nextLinePrefix, inputs);
-            setShowSuggest(canShowSuggestions(nextLinePrefix, false, nextSuggestions.length));
-          }}
-          onClick={() => {
-            captureViewState();
-            setShowSuggest(false);
-          }}
-          onSelect={captureViewState}
-          onKeyDown={handleKeyDown}
-          onKeyUp={(event) => {
-            captureViewState();
-            if (event.key === 'Escape') {
-              setShowSuggest(false);
-            } else if (showSuggest && isSuggestionNavigationKey(event.key)) {
-              setShowSuggest(true);
-            } else if (!isTypingKey(event)) {
-              setShowSuggest(false);
-            }
-          }}
-          onFocus={() => setShowSuggest(false)}
-          onScroll={(event) => {
-            syncScroll(event.currentTarget, highlightRef, gutterRef);
-            captureViewState();
-          }}
-          className="code-input"
-        />
-        {showSuggest && suggestions.length > 0 ? (
-          <div className="suggestions" style={{ top: Math.max(42, suggestionTop), left: Math.max(72, suggestionLeft) }}>
-            {suggestions.map((suggestion, index) => (
-              <button className={selectedSuggestion === index ? 'active' : ''} key={`${suggestion.kind}-${suggestion.label}`} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => {
-                applySuggestion(suggestion, value, onChange, textareaRef);
-                setShowSuggest(false);
-              }}>
-                <strong>{suggestion.label}</strong>
-                <span>{suggestion.detail}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
+      <div className="code-frame cm-code-frame" ref={hostRef} />
     </section>
   );
 }
 
-function canShowSuggestions(linePrefix: string, manual: boolean, suggestionCount = 1) {
-  if (manual) return true;
-
-  const assignmentIndex = linePrefix.indexOf('==');
-  if (assignmentIndex >= 0) {
-    return suggestionCount > 0 && linePrefix.slice(0, assignmentIndex).trim().length > 0;
-  }
-
-  return linePrefix.trim().length > 0;
-}
-
-function isTypingKey(event: KeyboardEvent<HTMLTextAreaElement>) {
-  if (event.ctrlKey || event.metaKey || event.altKey) return false;
-  return event.key.length === 1 || event.key === 'Backspace' || event.key === 'Delete';
-}
-
-function isSuggestionNavigationKey(key: string) {
-  return key === 'ArrowDown' || key === 'ArrowUp';
-}
-
-function applySuggestion(suggestion: Suggestion, value: string, onChange: (value: string) => void, ref: RefObject<HTMLTextAreaElement | null>) {
-  const textarea = ref.current;
-  if (!textarea) return;
-
-  const line = getLineAtOffset(value, textarea.selectionStart);
-  const lineEnd = value.indexOf('\n', line.start) === -1 ? value.length : value.indexOf('\n', line.start);
-  const current = value.slice(line.start, lineEnd);
-  const assignmentIndex = current.indexOf('==');
-  const commentMatch = suggestion.kind === 'file' ? current.slice(Math.max(0, assignmentIndex + 2)).match(/\s(?:!|#|\/\/).*/) : null;
-  const isValueSuggestion = assignmentIndex >= 0 && suggestion.kind !== 'command';
-  const replacementEnd = commentMatch?.index === undefined ? lineEnd : line.start + assignmentIndex + 2 + commentMatch.index;
-  const replacementStart = isValueSuggestion ? line.start + assignmentIndex + 2 : line.start;
-  const prefix = isValueSuggestion ? ' ' : '';
-  const insertText = `${prefix}${suggestion.insertText}`;
-  const nextValue = `${value.slice(0, replacementStart)}${insertText}${value.slice(replacementEnd)}`;
-  const nextCaret = replacementStart + insertText.length;
-
-  onChange(nextValue);
-  requestAnimationFrame(() => {
-    textarea.focus();
-    textarea.setSelectionRange(nextCaret, nextCaret);
+function replaceDocument(view: EditorView, value: string) {
+  view.dispatch({
+    changes: { from: 0, to: view.state.doc.length, insert: value }
   });
 }
 
-function getLineAtOffset(value: string, offset: number) {
-  const safeOffset = Math.min(Math.max(offset, 0), value.length);
-  const start = value.lastIndexOf('\n', Math.max(0, safeOffset - 1)) + 1;
-  const lineNumber = value.slice(0, safeOffset).split('\n').length;
+function captureCodeMirrorViewState(
+  view: EditorView,
+  onActiveLineChange: (line: number) => void,
+  onViewStateChange: (viewState: EditorViewState & { activeLine: number }) => void
+) {
+  const selection = view.state.selection.main;
+  const activeLine = view.state.doc.lineAt(selection.head).number;
+  onActiveLineChange(activeLine);
+  onViewStateChange({
+    activeLine,
+    cursorOffset: selection.head,
+    selectionStart: selection.from,
+    selectionEnd: selection.to,
+    scrollTop: view.scrollDOM.scrollTop,
+    scrollLeft: view.scrollDOM.scrollLeft
+  });
+}
+
+function restoreCodeMirrorViewState(view: EditorView, viewState: EditorViewState, onActiveLineChange: (line: number) => void) {
+  const safeStart = Math.min(Math.max(viewState.selectionStart, 0), view.state.doc.length);
+  const safeEnd = Math.min(Math.max(viewState.selectionEnd, safeStart), view.state.doc.length);
+  view.dispatch({ selection: { anchor: safeStart, head: safeEnd } });
+  view.scrollDOM.scrollTop = Math.min(Math.max(viewState.scrollTop, 0), Math.max(0, view.scrollDOM.scrollHeight - view.scrollDOM.clientHeight));
+  view.scrollDOM.scrollLeft = Math.min(Math.max(viewState.scrollLeft, 0), Math.max(0, view.scrollDOM.scrollWidth - view.scrollDOM.clientWidth));
+  onActiveLineChange(view.state.doc.lineAt(safeStart).number);
+}
+
+function autocompleteFromInputs(inputs: ProjectInput[]) {
+  return autocompletion({
+    activateOnTyping: true,
+    override: [
+      (context: CompletionContext) => {
+        const line = context.state.doc.lineAt(context.pos);
+        const prefix = line.text.slice(0, context.pos - line.from);
+        const suggestions = getAutocompleteSuggestions(prefix, inputs);
+        if (!context.explicit && suggestions.length === 0) return null;
+        const from = completionStart(line.text, context.pos - line.from, suggestions);
+        return {
+          from: line.from + from,
+          options: suggestions.map(toCompletion)
+        };
+      }
+    ]
+  });
+}
+
+function completionStart(lineText: string, column: number, suggestions: Suggestion[]) {
+  const assignmentIndex = lineText.indexOf('==');
+  if (assignmentIndex >= 0 && suggestions.some((suggestion) => suggestion.kind !== 'command')) {
+    const afterAssignment = lineText.slice(assignmentIndex + 2, column);
+    return assignmentIndex + 2 + (afterAssignment.match(/^\s*/)?.[0].length ?? 0);
+  }
+
+  const prefix = lineText.slice(0, column);
+  const match = prefix.match(/[^\s]*$/);
+  return column - (match?.[0].length ?? 0);
+}
+
+function toCompletion(suggestion: Suggestion): Completion {
   return {
-    lineNumber,
-    column: safeOffset - start,
-    start
+    label: suggestion.label,
+    detail: suggestion.detail,
+    type: suggestion.kind === 'file' ? 'file' : suggestion.kind === 'command' ? 'keyword' : 'constant',
+    apply: suggestion.insertText
   };
 }
 
-function moveCaretToLine(
-  lineNumber: number,
-  value: string,
-  ref: RefObject<HTMLTextAreaElement | null>,
-  highlightRef: RefObject<HTMLPreElement | null>,
-  gutterRef: RefObject<HTMLDivElement | null>,
-  onActiveLineChange: (line: number) => void,
-  onCursorOffsetChange: (offset: number) => void,
-  onViewStateChange: (viewState: EditorViewState & { activeLine: number }) => void
-) {
-  const textarea = ref.current;
-  if (!textarea) return;
-  const lines = value.split('\n');
-  const safeLine = Math.min(Math.max(lineNumber, 1), lines.length);
-  const offset = lines.slice(0, safeLine - 1).join('\n').length + (safeLine > 1 ? 1 : 0);
-  textarea.focus();
-  textarea.setSelectionRange(offset, offset);
-  textarea.scrollTop = Math.max(0, safeLine - 3) * 22;
-  syncScroll(textarea, highlightRef, gutterRef);
-  onCursorOffsetChange(offset);
-  onActiveLineChange(safeLine);
-  onViewStateChange({
-    activeLine: safeLine,
-    cursorOffset: offset,
-    selectionStart: offset,
-    selectionEnd: offset,
-    scrollTop: textarea.scrollTop,
-    scrollLeft: textarea.scrollLeft
+function tuflowSyntaxDecorations() {
+  return ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
+
+      constructor(view: EditorView) {
+        this.decorations = buildSyntaxDecorations(view);
+      }
+
+      update(update: ViewUpdate) {
+        if (update.docChanged || update.viewportChanged) {
+          this.decorations = buildSyntaxDecorations(update.view);
+        }
+      }
+    },
+    {
+      decorations: (plugin) => plugin.decorations
+    }
+  );
+}
+
+function buildSyntaxDecorations(view: EditorView) {
+  const decorations = [];
+  for (const range of view.visibleRanges) {
+    let pos = range.from;
+    while (pos <= range.to) {
+      const line = view.state.doc.lineAt(pos);
+      let tokenStart = line.from;
+      const tokens = tokenizeTuflowLine(line.text, parseTuflowLine(line.text, line.number));
+      for (const token of tokens) {
+        const tokenEnd = tokenStart + token.text.length;
+        if (token.text.trim()) {
+          decorations.push(Decoration.mark({ class: `tok-${token.kind}` }).range(tokenStart, tokenEnd));
+        }
+        tokenStart = tokenEnd;
+      }
+      if (line.to >= range.to) break;
+      pos = line.to + 1;
+    }
+  }
+  return Decoration.set(decorations, true);
+}
+
+function problemDecorations(problemLines: Map<number, Problem>) {
+  return EditorView.decorations.compute([], (state) => {
+    const decorations = [];
+    for (const problem of problemLines.values()) {
+      if (problem.lineNumber < 1 || problem.lineNumber > state.doc.lines) continue;
+      const line = state.doc.line(problem.lineNumber);
+      decorations.push(
+        Decoration.line({ class: `cm-problem-line ${problem.severity}` }).range(line.from),
+        Decoration.mark({ class: `tok-problem ${problem.severity}` }).range(line.from, line.to)
+      );
+    }
+    return Decoration.set(decorations, true);
   });
 }
 
-function syncScroll(textarea: HTMLTextAreaElement, highlightRef: RefObject<HTMLPreElement | null>, gutterRef: RefObject<HTMLDivElement | null>) {
-  if (highlightRef.current) {
-    highlightRef.current.scrollTop = textarea.scrollTop;
-    highlightRef.current.scrollLeft = textarea.scrollLeft;
-  }
-  if (gutterRef.current) {
-    gutterRef.current.scrollTop = textarea.scrollTop;
-  }
+function searchDecorations(search: string) {
+  return EditorView.decorations.compute([], (state) => {
+    const query = search.trim().toLowerCase();
+    if (!query) return Decoration.none;
+
+    const decorations = [];
+    const text = state.doc.toString();
+    const lowerText = text.toLowerCase();
+    let index = lowerText.indexOf(query);
+    while (index >= 0) {
+      decorations.push(Decoration.mark({ class: 'tok-search' }).range(index, index + query.length));
+      index = lowerText.indexOf(query, index + query.length);
+    }
+    return Decoration.set(decorations, true);
+  });
 }
