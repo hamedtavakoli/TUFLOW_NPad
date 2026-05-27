@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { classifyInput, getAutocompleteSuggestions } from '../lib/autocomplete';
+import { completionStart } from '../lib/completionRange';
+import type { Suggestion } from '../lib/types';
 
 describe('getAutocompleteSuggestions', () => {
   it('suggests matching commands while typing', () => {
@@ -57,4 +59,40 @@ describe('getAutocompleteSuggestions', () => {
     ]);
   });
 
+});
+
+describe('completionStart', () => {
+  const commandSuggestions: Suggestion[] = [
+    {
+      label: 'Read GIS',
+      detail: 'Read GIS == <gis layer>',
+      insertText: 'Read GIS == ',
+      kind: 'command'
+    }
+  ];
+
+  const valueSuggestions: Suggestion[] = [
+    {
+      label: 'ON',
+      detail: 'Option - Write CFL',
+      insertText: 'ON',
+      kind: 'keyword'
+    }
+  ];
+
+  it('replaces the whole command prefix after a completed first word', () => {
+    expect(completionStart('read ', 5, commandSuggestions)).toBe(0);
+  });
+
+  it('replaces the whole command prefix while typing the next command word', () => {
+    expect(completionStart('read g', 6, commandSuggestions)).toBe(0);
+  });
+
+  it('preserves indentation when replacing a command prefix', () => {
+    expect(completionStart('  read g', 8, commandSuggestions)).toBe(2);
+  });
+
+  it('keeps value completions scoped to the value after assignment', () => {
+    expect(completionStart('Write CFL == O', 14, valueSuggestions)).toBe(13);
+  });
 });

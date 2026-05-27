@@ -16,6 +16,7 @@ import {
   lineNumbers
 } from '@codemirror/view';
 import { getAutocompleteSuggestions } from '../lib/autocomplete';
+import { completionStart } from '../lib/completionRange';
 import type { Problem, ProjectInput, Suggestion } from '../lib/types';
 import { parseTuflowLine } from '../tuflow/parser/tuflowParser';
 import { tokenizeTuflowLine } from '../tuflow/editor/tuflowHighlighter';
@@ -349,18 +350,6 @@ function autocompleteFromInputs(inputs: ProjectInput[]) {
       }
     ]
   });
-}
-
-function completionStart(lineText: string, column: number, suggestions: Suggestion[]) {
-  const assignmentIndex = lineText.indexOf('==');
-  if (assignmentIndex >= 0 && suggestions.some((suggestion) => suggestion.kind !== 'command')) {
-    const afterAssignment = lineText.slice(assignmentIndex + 2, column);
-    return assignmentIndex + 2 + (afterAssignment.match(/^\s*/)?.[0].length ?? 0);
-  }
-
-  const prefix = lineText.slice(0, column);
-  const match = prefix.match(/[^\s]*$/);
-  return column - (match?.[0].length ?? 0);
 }
 
 function toCompletion(suggestion: Suggestion): Completion {
