@@ -88,6 +88,26 @@ button:disabled,
   font-size: 17px;
 }
 
+.brand-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.version-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid #c9d5dc;
+  border-radius: 8px;
+  background: #eef4f5;
+  color: #485769;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .brand p,
 .panel-header p {
   margin: 2px 0 0;

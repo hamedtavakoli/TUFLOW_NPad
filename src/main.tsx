@@ -9,7 +9,10 @@ import { classifyInput } from './lib/autocomplete';
 import { validateTuflowText } from './lib/validator';
 import { formatTuflowText } from './lib/formatter';
 import type { ProjectInput } from './lib/types';
+import packageJson from '../package.json';
 import './styles.css';
+
+const appVersion = packageJson.version;
 
 const starterText = `! TUFLOW Command Studio starter control file
 Geometry Control File == model\\M01_001.tgc
@@ -228,7 +231,10 @@ function App() {
         <div className="brand">
           <span className="brand-mark">TCS</span>
           <div>
-            <h1>TUFLOW Command Studio</h1>
+            <div className="brand-title">
+              <h1>TUFLOW Command Studio</h1>
+              <span className="version-badge">v{appVersion}</span>
+            </div>
             <p>TCS control file editor</p>
           </div>
         </div>
