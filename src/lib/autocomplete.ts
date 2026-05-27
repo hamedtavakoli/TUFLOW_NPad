@@ -48,10 +48,19 @@ export function getAutocompleteSuggestions(lineText: string, inputs: ProjectInpu
   const matches = trimmed ? commandStartsWith(trimmed) : tuflowCommands.slice(0, 8);
   return matches.map((command) => ({
     label: command.name,
-    detail: command.syntax,
+    detail: commandSuggestionDetail(command.syntax, command.summary),
     insertText: command.requiresAssignment ? `${command.name} == ` : command.name,
     kind: 'command'
   }));
+}
+
+export function commandSuggestionDetail(syntax: string, summary: string | undefined): string {
+  return summary ? `${syntax} - ${shortenSummary(summary)}` : syntax;
+}
+
+function shortenSummary(summary: string): string {
+  const maxLength = 110;
+  return summary.length > maxLength ? `${summary.slice(0, maxLength - 3).trimEnd()}...` : summary;
 }
 
 export function classifyInput(name: string, path = name): ProjectInput {

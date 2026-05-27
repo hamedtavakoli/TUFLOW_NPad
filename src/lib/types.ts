@@ -6,6 +6,7 @@ export interface TuflowCommand {
   name: string;
   syntax: string;
   description: string;
+  summary?: string;
   category: string;
   allowedFileTypes: string[];
   examples: string[];

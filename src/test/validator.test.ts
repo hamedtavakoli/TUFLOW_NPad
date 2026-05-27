@@ -127,7 +127,7 @@ describe('validateTuflowText', () => {
   });
 
   it('accepts mixed option/file commands when the option is used', () => {
-    const problems = validateTuflowText('ESTRY Control File == AUTO', []);
+    const problems = validateTuflowText('Quadtree Control File == Single Level', []);
 
     expect(problems.some((problem) => problem.id.startsWith('empty-ref'))).toBe(false);
     expect(problems.some((problem) => problem.id.startsWith('missing-input'))).toBe(false);

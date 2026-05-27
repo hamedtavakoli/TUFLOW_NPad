@@ -3,6 +3,7 @@ export interface RawTuflowCommandRecord {
   command_pattern: string;
   command_variants?: string[];
   value_pattern?: string;
+  summary?: string;
   has_value?: boolean;
   solver?: string;
   is_legacy?: boolean | string;
@@ -16,6 +17,7 @@ export interface RawTuflowCommandRow {
   command: string;
   command_pattern: string;
   value_pattern?: string;
+  summary?: string;
   solver?: string;
   is_legacy?: boolean | string;
   source_url?: string;
@@ -36,6 +38,7 @@ export interface NormalisedTuflowCommand {
   patternTokens: string[];
   variants: NormalisedCommandVariant[];
   valuePattern?: string;
+  summary?: string;
   valueSpec: CommandValueSpec;
   hasValue: boolean;
   solver?: string;
@@ -81,6 +84,7 @@ export function buildTuflowCommandCatalogFromRows(rows: RawTuflowCommandRow[]): 
 
     if (current) {
       current.command_variants = uniqueStrings([...(current.command_variants ?? []), command]);
+      current.summary = current.summary ?? normaliseSummary(row.summary);
       return;
     }
 
@@ -89,6 +93,7 @@ export function buildTuflowCommandCatalogFromRows(rows: RawTuflowCommandRow[]): 
       command_pattern: commandPattern,
       command_variants: [command],
       value_pattern: valuePattern,
+      summary: normaliseSummary(row.summary),
       has_value: Boolean(valuePattern),
       solver: row.solver,
       is_legacy: row.is_legacy,
@@ -105,6 +110,7 @@ function normaliseRecord(record: RawTuflowCommandRecord): NormalisedTuflowComman
   const controlFile = record.control_file.trim().toUpperCase();
   const commandPattern = collapseCommandSpaces(record.command_pattern);
   const valuePattern = record.value_pattern?.trim() || undefined;
+  const summary = normaliseSummary(record.summary);
   const variants = uniqueStrings(record.command_variants?.length ? record.command_variants : [commandPattern]).map((name) => {
     const collapsedName = collapseCommandSpaces(name);
     return {
@@ -122,6 +128,7 @@ function normaliseRecord(record: RawTuflowCommandRecord): NormalisedTuflowComman
     patternTokens: commandTokens(commandPattern),
     variants,
     valuePattern,
+    summary,
     valueSpec: classifyValuePattern(valuePattern, record.has_value ?? Boolean(valuePattern)),
     hasValue: record.has_value ?? Boolean(valuePattern),
     solver: record.solver?.trim() || undefined,
@@ -167,5 +174,9 @@ function collapseCommandSpaces(value: string): string {
 
 function uniqueStrings(values: string[]): string[] {
   return Array.from(new Set(values.map(collapseCommandSpaces).filter(Boolean)));
+}
+
+function normaliseSummary(value: string | undefined): string | undefined {
+  return value?.trim() || undefined;
 }
 import { classifyValuePattern, type CommandValueSpec } from './valuePattern';

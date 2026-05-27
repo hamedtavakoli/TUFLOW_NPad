@@ -18,7 +18,8 @@ export const tuflowCommands = catalog.variants.map(({ commandId, name, tokens })
   return {
     name,
     syntax: `${name}${command.hasValue ? ` == ${command.valuePattern ?? '<value>'}` : ''}`,
-    description: buildDescription(command.controlFile, command.commandPattern, command.solver, command.isLegacy),
+    description: command.summary ?? buildDescription(command.controlFile, command.commandPattern, command.solver, command.isLegacy),
+    summary: command.summary,
     category: command.controlFile,
     allowedFileTypes,
     examples: [buildExample(name, command.hasValue, command.valuePattern, allowedFileTypes)],

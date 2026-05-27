@@ -14,6 +14,7 @@ describe('command catalog normalisation', () => {
         command_pattern: 'Read Grid Zpts [ {} | ADD ]',
         command_variants: [' Read Grid Zpts ', 'Read Grid Zpts ADD'],
         value_pattern: '[ <grid_file> ]',
+        summary: ' Reads elevation points from a grid file. ',
         has_value: true,
         is_legacy: 'false'
       }
@@ -21,6 +22,7 @@ describe('command catalog normalisation', () => {
 
     expect(catalog.commands[0].controlFile).toBe('TGC');
     expect(catalog.commands[0].variants.map((variant) => variant.name)).toEqual(['Read Grid Zpts', 'Read Grid Zpts ADD']);
+    expect(catalog.commands[0].summary).toBe('Reads elevation points from a grid file.');
     expect(catalog.commands[0].variants[1].tokens).toEqual(['read', 'grid', 'zpts', 'add']);
     expect(catalog.commands[0].valueSpec).toMatchObject({
       expectsValue: true,
@@ -36,6 +38,7 @@ describe('command catalog normalisation', () => {
         command: 'Read Grid Zpts',
         command_pattern: 'Read Grid Zpts [ {} | ADD ]',
         value_pattern: '[ <grid_file> ]',
+        summary: '',
         is_legacy: 'false'
       },
       {
@@ -43,12 +46,14 @@ describe('command catalog normalisation', () => {
         command: 'Read Grid Zpts ADD',
         command_pattern: 'Read Grid Zpts [ {} | ADD ]',
         value_pattern: '[ <grid_file> ]',
+        summary: 'Reads and adds grid elevations to Zpts.',
         is_legacy: 'false'
       }
     ]);
 
     expect(catalog.commands).toHaveLength(1);
     expect(catalog.variants).toHaveLength(2);
+    expect(catalog.commands[0].summary).toBe('Reads and adds grid elevations to Zpts.');
     expect(catalog.duplicateVariants).toEqual([]);
   });
 
