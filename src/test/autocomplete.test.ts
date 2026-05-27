@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyInput, commandSuggestionDetail, getAutocompleteSuggestions } from '../lib/autocomplete';
+import { classifyInput, commandSuggestionDetail, commandSyntaxSuffix, getAutocompleteSuggestions } from '../lib/autocomplete';
 import { completionStart } from '../lib/completionRange';
 import type { Suggestion } from '../lib/types';
 
@@ -10,11 +10,13 @@ describe('getAutocompleteSuggestions', () => {
     expect(suggestions.map((suggestion) => suggestion.label)).toContain('Read GIS IWL');
   });
 
-  it('includes command summaries in suggestion details', () => {
+  it('splits command syntax and summaries for cleaner suggestion rows', () => {
     const suggestion = getAutocompleteSuggestions('BC Control File', [])[0];
 
-    expect(suggestion.detail).toContain('BC Control File == [ <.tbc> ] - ');
-    expect(suggestion.detail).toContain('Specifies the boundary control file');
+    expect(suggestion.detail).toContain(' == [ <.tbc> ] - ');
+    expect(suggestion.detail).not.toContain('BC Control File ==');
+    expect(suggestion.syntaxSuffix).toBe(' == [ <.tbc> ]');
+    expect(suggestion.summary).toContain('Specifies the boundary control file');
   });
 
   it('suggests registered files that match the command type', () => {
@@ -70,14 +72,20 @@ describe('getAutocompleteSuggestions', () => {
 
 describe('commandSuggestionDetail', () => {
   it('uses syntax only when no summary is available', () => {
-    expect(commandSuggestionDetail('Read GIS == [ <gis_layer> ]', undefined)).toBe('Read GIS == [ <gis_layer> ]');
+    expect(commandSuggestionDetail('Read GIS', 'Read GIS == [ <gis_layer> ]', undefined)).toBe(' == [ <gis_layer> ]');
   });
 
   it('shortens long command summaries', () => {
-    const detail = commandSuggestionDetail('Read GIS == [ <gis_layer> ]', 'A'.repeat(140));
+    const detail = commandSuggestionDetail('Read GIS', 'Read GIS == [ <gis_layer> ]', 'A'.repeat(140));
 
-    expect(detail).toHaveLength('Read GIS == [ <gis_layer> ] - '.length + 110);
+    expect(detail).toHaveLength(' == [ <gis_layer> ] - '.length + 90);
     expect(detail.endsWith('...')).toBe(true);
+  });
+});
+
+describe('commandSyntaxSuffix', () => {
+  it('removes the repeated command name from syntax', () => {
+    expect(commandSyntaxSuffix('Model Events', 'Model Events == [ <e1> | <e2> ]')).toBe(' == [ <e1> | <e2> ]');
   });
 });
 

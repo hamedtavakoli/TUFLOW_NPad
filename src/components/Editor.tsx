@@ -35,6 +35,10 @@ interface EditorViewState {
   scrollLeft: number;
 }
 
+type TuflowCompletion = Completion & {
+  summary?: string;
+};
+
 interface EditorProps {
   value: string;
   onChange: (value: string) => void;
@@ -336,6 +340,12 @@ function restoreCodeMirrorViewState(view: EditorView, viewState: EditorViewState
 function autocompleteFromInputs(inputs: ProjectInput[]) {
   return autocompletion({
     activateOnTyping: true,
+    addToOptions: [
+      {
+        render: (completion) => renderCommandCompletionSummary(completion),
+        position: 85
+      }
+    ],
     override: [
       (context: CompletionContext) => {
         const line = context.state.doc.lineAt(context.pos);
@@ -353,12 +363,28 @@ function autocompleteFromInputs(inputs: ProjectInput[]) {
 }
 
 function toCompletion(suggestion: Suggestion): Completion {
-  return {
+  const completion: TuflowCompletion = {
     label: suggestion.label,
-    detail: suggestion.detail,
-    type: suggestion.kind === 'file' ? 'file' : suggestion.kind === 'command' ? 'keyword' : 'constant',
-    apply: suggestion.insertText
+    detail: suggestion.kind === 'command' ? suggestion.syntaxSuffix : suggestion.detail,
+    type: suggestion.kind === 'file' ? 'file' : suggestion.kind === 'command' ? 'keyword tuflow-command' : 'constant',
+    apply: suggestion.insertText,
+    summary: suggestion.kind === 'command' ? suggestion.summary : undefined
   };
+  return completion;
+}
+
+function renderCommandCompletionSummary(completion: Completion): HTMLElement | null {
+  if (!completion.type?.includes('tuflow-command')) {
+    return null;
+  }
+
+  const tuflowCompletion = completion as TuflowCompletion;
+  if (!tuflowCompletion.summary) return null;
+
+  const summary = document.createElement('span');
+  summary.className = 'cm-tuflow-completion-summary';
+  summary.textContent = tuflowCompletion.summary;
+  return summary;
 }
 
 function tuflowSyntaxDecorations() {

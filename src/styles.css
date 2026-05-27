@@ -139,6 +139,52 @@ button:disabled,
   display: none;
 }
 
+.cm-tooltip-autocomplete ul li[role='option'] {
+  display: flex;
+  align-items: baseline;
+  min-height: 24px;
+  overflow: hidden;
+}
+
+.cm-tooltip-autocomplete .cm-completionIcon {
+  flex: 0 0 auto;
+}
+
+.cm-tooltip-autocomplete .cm-completionLabel {
+  flex: 0 0 auto;
+  overflow: hidden;
+  max-width: 220px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cm-tooltip-autocomplete .cm-completionDetail {
+  flex: 0 0 auto;
+  overflow: hidden;
+  max-width: 260px;
+  color: #006b75;
+  font-style: italic;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cm-tuflow-completion-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: 8px;
+  overflow: hidden;
+  color: #637083;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cm-tooltip-autocomplete ul li[aria-selected='true'] .cm-tuflow-completion-summary,
+.cm-tooltip-autocomplete ul li[aria-selected='true'] .cm-completionDetail {
+  color: inherit;
+}
+
 .workspace {
   min-height: 0;
   display: grid;

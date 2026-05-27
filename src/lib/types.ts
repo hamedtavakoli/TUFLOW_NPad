@@ -70,4 +70,6 @@ export interface Suggestion {
   detail: string;
   insertText: string;
   kind: 'command' | 'file' | 'keyword' | 'snippet';
+  syntaxSuffix?: string;
+  summary?: string;
 }

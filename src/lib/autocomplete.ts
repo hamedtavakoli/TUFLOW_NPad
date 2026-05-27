@@ -48,19 +48,27 @@ export function getAutocompleteSuggestions(lineText: string, inputs: ProjectInpu
   const matches = trimmed ? commandStartsWith(trimmed) : tuflowCommands.slice(0, 8);
   return matches.map((command) => ({
     label: command.name,
-    detail: commandSuggestionDetail(command.syntax, command.summary),
+    detail: commandSuggestionDetail(command.name, command.syntax, command.summary),
     insertText: command.requiresAssignment ? `${command.name} == ` : command.name,
-    kind: 'command'
+    kind: 'command',
+    syntaxSuffix: commandSyntaxSuffix(command.name, command.syntax),
+    summary: command.summary ? shortenText(command.summary, 90) : undefined
   }));
 }
 
-export function commandSuggestionDetail(syntax: string, summary: string | undefined): string {
-  return summary ? `${syntax} - ${shortenSummary(summary)}` : syntax;
+export function commandSuggestionDetail(commandName: string, syntax: string, summary: string | undefined): string {
+  const suffix = commandSyntaxSuffix(commandName, syntax);
+  const syntaxDetail = suffix || syntax;
+  return summary ? `${syntaxDetail} - ${shortenText(summary, 90)}` : syntaxDetail;
 }
 
-function shortenSummary(summary: string): string {
-  const maxLength = 110;
-  return summary.length > maxLength ? `${summary.slice(0, maxLength - 3).trimEnd()}...` : summary;
+export function commandSyntaxSuffix(commandName: string, syntax: string): string {
+  const suffix = syntax.startsWith(commandName) ? syntax.slice(commandName.length).replace(/^\s+/, ' ') : syntax;
+  return shortenText(suffix, 90);
+}
+
+function shortenText(text: string, maxLength: number): string {
+  return text.length > maxLength ? `${text.slice(0, maxLength - 3).trimEnd()}...` : text;
 }
 
 export function classifyInput(name: string, path = name): ProjectInput {
