@@ -11,7 +11,7 @@ import { formatTuflowText } from './lib/formatter';
 import type { ProjectInput } from './lib/types';
 import './styles.css';
 
-const starterText = `! TUFLOW NPad starter control file
+const starterText = `! TUFLOW Command Studio starter control file
 Geometry Control File == model\\M01_001.tgc
 BC Control File == bc\\M01_001.tbc
 Event File == events\\design_events.tef
@@ -226,10 +226,10 @@ function App() {
     <div className="app-shell">
       <header className="toolbar">
         <div className="brand">
-          <span className="brand-mark">TN</span>
+          <span className="brand-mark">TCS</span>
           <div>
-            <h1>TUFLOW NPad</h1>
-            <p>Control file editor</p>
+            <h1>TUFLOW Command Studio</h1>
+            <p>TCS control file editor</p>
           </div>
         </div>
         <div className="toolbar-actions">

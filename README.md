@@ -1,4 +1,4 @@
-# TUFLOW NPad
+# TUFLOW Command Studio
 
 A lightweight browser-based editor for TUFLOW flood modelling control files.
 
