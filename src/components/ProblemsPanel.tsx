@@ -18,23 +18,23 @@ export function ProblemsPanel({
   return (
     <section className="problems-panel">
       <div className="panel-header compact">
-        <h2>Problems</h2>
+        <h2>Diagnostics</h2>
         <div className="problem-header-actions">
-          <label className="switch-control" title="Show project file availability warnings">
+          <p>{problems.length === 0 ? 'No issues' : `${problems.length} issue${problems.length === 1 ? '' : 's'}`}</p>
+          <label className="switch-control" title="Show reference availability checks">
             <input
               type="checkbox"
               checked={showMissingInputProblems}
               onChange={(event) => onShowMissingInputProblemsChange(event.target.checked)}
             />
             <span />
-            Project files
+            Reference Checks
           </label>
-          <p>{problems.length === 0 ? 'No warnings' : `${problems.length} issue${problems.length === 1 ? '' : 's'}`}</p>
         </div>
       </div>
       <div className="problem-list">
         {problems.length === 0 ? (
-          <div className="empty-state">Validation is clean.</div>
+          <div className="empty-state">All checks clear.</div>
         ) : (
           problems.map((problem) => (
             <button className={`problem-row ${problem.severity} ${activeLine === problem.lineNumber ? 'active' : ''}`} key={problem.id} type="button" onClick={() => onSelectLine(problem.lineNumber)}>

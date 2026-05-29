@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { AlignLeft, Download, FilePlus2, FolderOpen, PlayCircle, Redo2, Save, Undo2 } from 'lucide-react';
+import { AlignLeft, Download, FilePlus2, FolderOpen, Moon, PlayCircle, Redo2, Save, Sun, Undo2 } from 'lucide-react';
 import { Editor } from './components/Editor';
 import { FilePanel } from './components/FilePanel';
 import { ProblemsPanel } from './components/ProblemsPanel';
@@ -18,23 +18,57 @@ import {
 import { validateTuflowText } from './lib/validator';
 import { formatTuflowText } from './lib/formatter';
 import { getEditorLanguage, isTuflowEditorLanguage } from './lib/editorLanguage';
+import { buildTuflowSymbolIndex, emptyTuflowSymbolIndex } from './lib/tuflowSymbols';
 import type { ProjectFileIndex, ProjectInput } from './lib/types';
 import packageJson from '../package.json';
+import appIconUrl from '../assets/Image May 29, 2026, 11_25_10 PM.png';
 import './styles.css';
 
 const appVersion = packageJson.version;
 
-const starterText = `! TUFLOW Command Studio starter control file
+const starterText = `! Welcome to TUFLOW Command Studio
+! This welcome file is a guide for TCS. It is not intended to be run as a model.
+! Open your own .tcf, .tgc, .tbc, .tef, .ecf, .toc, .trd, .bat, or .cmd files when you are ready.
+
+! 1. Choose a Model Root from the Project Files panel.
+!    TCS indexes readable project files and checks referenced paths against that root.
 Geometry Control File == model\\M01_001.tgc
 BC Control File == bc\\M01_001.tbc
 Event File == events\\design_events.tef
 
-Cell Size == 5
+! 2. Use autocomplete while typing commands.
+!    Tab accepts the full selected suggestion.
+!    ArrowRight accepts the next word of a selected suggestion.
 Read GIS == gis\\2d_code_M01.shp
 Read GRID == grids\\dem_5m.asc
-BC Database == bc_dbase\\bc_dbase.csv
 Read Materials File == materials\\materials.tmf
-Output Folder == results\\<<~s1~>>\\
+
+! 3. Use Command Guide for the active line and Library for searchable command help.
+Cell Size == 5
+Timestep == 1.0
+Output Folder == results\\~s1~\\~e1~\\
+
+! 4. Check References to show missing, excluded, or variable-based file references.
+!    Reference Checks in Diagnostics controls whether project file availability messages are shown.
+BC Database == bc_dbase\\bc_dbase.csv
+
+! 5. Variables can centralise values and can be reused with <<name>>.
+Set Variable DEM_GRID == grids\\dem_5m.asc
+Set Variable RUN_TIMESTEP == 1.0
+Read GRID == <<DEM_GRID>>
+Timestep == <<RUN_TIMESTEP>>
+
+! 6. Events and scenarios are also available as variables in TUFLOW.
+Model Events == 01AEP | 02AEP
+Model Scenarios == 2m | 5m | 10m
+If Scenario == 5m
+  Set Variable GRID_SIZE == 5
+Else If Scenario == 10m
+  Set Variable GRID_SIZE == 10
+End If
+
+! 7. Dark mode, diagnostics, formatting, command help, and project browsing are available from the main page.
+!    This file is safe to edit or close.
 `;
 
 interface OpenFileTab {
@@ -55,7 +89,7 @@ interface OpenFileTab {
 
 const starterFile: OpenFileTab = {
   id: 'starter-model',
-  name: 'model.tcf',
+  name: 'Welcome.tcf',
   text: starterText,
   savedText: starterText,
   activeLine: 1,
@@ -81,6 +115,7 @@ type WindowWithDirectoryPicker = Window & {
 };
 
 function App() {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => initialTheme());
   const [files, setFiles] = useState<OpenFileTab[]>([starterFile]);
   const [activeFileId, setActiveFileId] = useState(starterFile.id);
   const [requestedLine, setRequestedLine] = useState<{ fileId: string; lineNumber: number; nonce: number } | null>(null);
@@ -91,7 +126,7 @@ function App() {
   const [excludedFolderNames, setExcludedFolderNames] = useState(defaultExcludedFolderNames);
   const [lastIndexedAt, setLastIndexedAt] = useState<string | undefined>();
   const [hasRunProjectValidation, setHasRunProjectValidation] = useState(false);
-  const [validationStatus, setValidationStatus] = useState('Select a project root to check referenced files.');
+  const [validationStatus, setValidationStatus] = useState('Choose a model root to check references.');
 
   const activeFile = files.find((file) => file.id === activeFileId) ?? files[0];
   const text = activeFile?.text ?? '';
@@ -114,15 +149,20 @@ function App() {
     [excludedFolderNames, files, projectFileIndex]
   );
   const projectInputs = useMemo(() => projectInputsFromIndex(availabilityIndex, files), [availabilityIndex, files]);
+  const tuflowSymbols = useMemo(
+    () => (isActiveTuflowFile ? buildTuflowSymbolIndex(text) : emptyTuflowSymbolIndex),
+    [isActiveTuflowFile, text]
+  );
   const allProblems = useMemo(
     () =>
       isActiveTuflowFile
         ? validateTuflowText(text, projectInputs, {
             checkProjectFiles: hasRunProjectValidation,
-            projectFileIndex: availabilityIndex
+            projectFileIndex: availabilityIndex,
+            symbols: tuflowSymbols
           })
         : [],
-    [availabilityIndex, hasRunProjectValidation, isActiveTuflowFile, projectInputs, text]
+    [availabilityIndex, hasRunProjectValidation, isActiveTuflowFile, projectInputs, text, tuflowSymbols]
   );
   const problems = useMemo(
     () => (showMissingInputProblems ? allProblems : allProblems.filter((problem) => !problem.id.startsWith('missing-input'))),
@@ -132,8 +172,20 @@ function App() {
   useEffect(() => {
     if (!hasRunProjectValidation) return;
     const fileProblems = allProblems.filter((problem) => /^(missing-input|uncheckable-input)-/.test(problem.id));
-    setValidationStatus(fileProblems.length === 0 ? 'All referenced files are available.' : `${fileProblems.length} referenced file issue${fileProblems.length === 1 ? '' : 's'} found.`);
+    setValidationStatus(fileProblems.length === 0 ? 'All references found.' : `${fileProblems.length} reference issue${fileProblems.length === 1 ? '' : 's'} found.`);
   }, [allProblems, hasRunProjectValidation]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('tcs-theme', theme);
+  }, [theme]);
+
+  useEffect(() => {
+    const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]') ?? document.createElement('link');
+    icon.rel = 'icon';
+    icon.href = appIconUrl;
+    document.head.appendChild(icon);
+  }, []);
 
   useEffect(() => {
     const warnBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -198,7 +250,7 @@ function App() {
     setActiveFileId(id);
     setRequestedLine(null);
     setHasRunProjectValidation(false);
-    setValidationStatus(projectFileIndex ? 'Ready to validate referenced files.' : 'Select a project root to check referenced files.');
+    setValidationStatus(projectFileIndex ? 'Ready to check references.' : 'Choose a model root to check references.');
   };
 
   const closeFile = (id: string) => {
@@ -242,7 +294,7 @@ function App() {
     downloadText(activeFile.name, text);
     setFiles((current) => current.map((file) => (file.id === activeFile.id ? { ...file, savedText: file.text } : file)));
   };
-  const exportProblems = () => downloadText(`${stripExtension(activeFile.name)}-problems.json`, JSON.stringify(problems, null, 2));
+  const exportProblems = () => downloadText(`${stripExtension(activeFile.name)}-diagnostics.json`, JSON.stringify(problems, null, 2));
   const validateActiveFile = async () => {
     if (!isActiveTuflowFile) {
       setHasRunProjectValidation(false);
@@ -253,19 +305,20 @@ function App() {
 
     const index = availabilityIndex ?? await chooseProjectRoot();
     if (!index) {
-      setValidationStatus('Project root is required for referenced file checks.');
+      setValidationStatus('Model root is required for reference checks.');
       return;
     }
 
     const validationProblems = validateTuflowText(text, projectInputs, {
       checkProjectFiles: true,
-      projectFileIndex: index
+      projectFileIndex: index,
+      symbols: tuflowSymbols
     });
     const fileProblems = validationProblems.filter((problem) => /^(missing-input|uncheckable-input)-/.test(problem.id));
 
     setHasRunProjectValidation(true);
     setShowMissingInputProblems(true);
-    setValidationStatus(fileProblems.length === 0 ? 'All referenced files are available.' : `${fileProblems.length} referenced file issue${fileProblems.length === 1 ? '' : 's'} found.`);
+    setValidationStatus(fileProblems.length === 0 ? 'All references found.' : `${fileProblems.length} reference issue${fileProblems.length === 1 ? '' : 's'} found.`);
 
     const firstProblem = fileProblems[0] ?? validationProblems[0];
     if (firstProblem) {
@@ -279,7 +332,7 @@ function App() {
 
   const chooseProjectRoot = async (): Promise<ProjectFileIndex | undefined> => {
     if (!('showDirectoryPicker' in window)) {
-      window.alert('Use the Select Root button in the Project panel to select a root folder.');
+      window.alert('Use Choose Root in Project Files to select a model root folder.');
       return undefined;
     }
 
@@ -295,7 +348,7 @@ function App() {
       return nextIndex;
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) {
-        setValidationStatus('Project root selection failed.');
+        setValidationStatus('Model root selection failed.');
       }
       return undefined;
     }
@@ -359,7 +412,7 @@ function App() {
       setHasRunProjectValidation(false);
       setValidationStatus(`${index.rootName} refreshed with ${index.files.length} files.`);
     } catch {
-      setValidationStatus('Project root refresh failed. Select the root again.');
+      setValidationStatus('Model root refresh failed. Choose the root again.');
     }
   };
 
@@ -418,7 +471,9 @@ function App() {
     <div className="app-shell">
       <header className="toolbar">
         <div className="brand">
-          <span className="brand-mark">TCS</span>
+          <span className="brand-mark">
+            <img src={appIconUrl} alt="" />
+          </span>
           <div>
             <div className="brand-title">
               <h1>TUFLOW Command Studio</h1>
@@ -428,39 +483,51 @@ function App() {
           </div>
         </div>
         <div className="toolbar-actions">
-          <button type="button" onClick={newFile} title="New file">
-            <FilePlus2 size={17} />
-            New
-          </button>
-          <label className="button-like" title="Open files">
-            <FolderOpen size={17} />
-            Open
-            <input type="file" multiple accept={readableProjectFileAccept} onChange={(event) => openFiles(event, setFiles, selectFile)} />
-          </label>
-          <button type="button" onClick={saveFile} title="Save active file">
-            <Save size={17} />
-            Save
-          </button>
-          <button type="button" onClick={undo} title="Undo" disabled={activeFile.undoStack.length === 0}>
-            <Undo2 size={17} />
-            Undo
-          </button>
-          <button type="button" onClick={redo} title="Redo" disabled={activeFile.redoStack.length === 0}>
-            <Redo2 size={17} />
-            Redo
-          </button>
-          <button type="button" onClick={validateActiveFile} title="Validate referenced files">
-            <PlayCircle size={17} />
-            Validate
-          </button>
-          <button type="button" onClick={() => updateActiveText(formatTuflowText(text), true)} title="Format assignments" disabled={!isActiveTuflowFile}>
-            <AlignLeft size={17} />
-            Format
-          </button>
-          <button type="button" onClick={exportProblems} title="Export problems">
-            <Download size={17} />
-            Export
-          </button>
+          <div className="toolbar-group">
+            <button type="button" onClick={newFile} title="New file">
+              <FilePlus2 size={16} />
+              New
+            </button>
+            <label className="button-like" title="Open files">
+              <FolderOpen size={16} />
+              Open
+              <input type="file" multiple accept={readableProjectFileAccept} onChange={(event) => openFiles(event, setFiles, selectFile)} />
+            </label>
+            <button type="button" onClick={saveFile} title="Save active file">
+              <Save size={16} />
+              Save
+            </button>
+          </div>
+          <div className="toolbar-group compact">
+            <button
+              type="button"
+              onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')}
+              title={theme === 'dark' ? 'Use light mode' : 'Use dark mode'}
+              aria-label={theme === 'dark' ? 'Use light mode' : 'Use dark mode'}
+            >
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+            <button type="button" onClick={undo} title="Undo" aria-label="Undo" disabled={activeFile.undoStack.length === 0}>
+              <Undo2 size={16} />
+            </button>
+            <button type="button" onClick={redo} title="Redo" aria-label="Redo" disabled={activeFile.redoStack.length === 0}>
+              <Redo2 size={16} />
+            </button>
+          </div>
+          <div className="toolbar-group">
+            <button type="button" className="primary-action" onClick={validateActiveFile} title="Check referenced files">
+              <PlayCircle size={16} />
+              Check References
+            </button>
+            <button type="button" onClick={() => updateActiveText(formatTuflowText(text), true)} title="Format file" disabled={!isActiveTuflowFile}>
+              <AlignLeft size={16} />
+              Format File
+            </button>
+            <button type="button" onClick={exportProblems} title="Export diagnostics">
+              <Download size={16} />
+              Export
+            </button>
+          </div>
           <span className="validation-status" title={validationStatus}>{validationStatus}</span>
         </div>
       </header>
@@ -492,6 +559,7 @@ function App() {
             onUndo={undo}
             onRedo={redo}
             inputs={projectInputs}
+            symbols={tuflowSymbols}
             problems={problems}
             editorLanguage={activeEditorLanguage}
             activeLine={activeLine}
@@ -614,6 +682,14 @@ function normaliseEditorText(text: string): string {
 function stripExtension(filename: string) {
   const index = filename.lastIndexOf('.');
   return index > 0 ? filename.slice(0, index) : filename;
+}
+
+function initialTheme(): 'light' | 'dark' {
+  const stored = localStorage.getItem('tcs-theme');
+  if (stored === 'light' || stored === 'dark') {
+    return stored;
+  }
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 createRoot(document.getElementById('root')!).render(

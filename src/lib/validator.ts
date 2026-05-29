@@ -4,6 +4,7 @@ import { checkProjectFileAvailability, createProjectFileIndexFromInputs } from '
 import type { ParsedLine, Problem, ProjectFileIndex, ProjectInput } from './types';
 import type { CommandValueSpec } from './valuePattern';
 import { checkTuflowCommandTokens } from '../tuflow/parser/tuflowParser';
+import { activeFileVariableNames, buildTuflowSymbolIndex, type TuflowSymbolIndex } from './tuflowSymbols';
 
 const severityRank = {
   error: 0,
@@ -14,15 +15,25 @@ const severityRank = {
 interface ValidationOptions {
   checkProjectFiles?: boolean;
   projectFileIndex?: ProjectFileIndex;
+  symbols?: TuflowSymbolIndex;
 }
 
 export function validateTuflowText(text: string, inputs: ProjectInput[], options: ValidationOptions = {}): Problem[] {
-  return validateParsedLines(parseTuflowText(text), inputs, options);
+  return validateParsedLines(parseTuflowText(text), inputs, {
+    ...options,
+    symbols: options.symbols ?? buildTuflowSymbolIndex(text)
+  });
 }
 
 export function validateParsedLines(lines: ParsedLine[], inputs: ProjectInput[], options: ValidationOptions = {}): Problem[] {
   const problems: Problem[] = [];
   const availabilityIndex = options.projectFileIndex ?? createProjectFileIndexFromInputs('Project files', inputs);
+  const symbols = options.symbols;
+  const knownVariableNames = new Set(activeFileVariableNames(symbols ?? buildTuflowSymbolIndex(lines.map((line) => line.raw).join('\n'))).map((name) => name.toLowerCase()));
+
+  if (symbols) {
+    problems.push(...validateSymbols(symbols, knownVariableNames));
+  }
 
   for (const line of lines) {
     if (line.isBlank || line.isComment) {
@@ -70,6 +81,7 @@ export function validateParsedLines(lines: ParsedLine[], inputs: ProjectInput[],
     const valueSpec = command.valueSpec;
     const matchedOption = matchesOption(valueText, valueSpec);
     const shouldValidateValue = line.hasAssignment && Boolean(valueSpec);
+    const valueUsesVariable = hasVariableReference(valueText);
 
     if (line.hasAssignment && valueSpec && !valueSpec.expectsValue) {
       problems.push({
@@ -91,7 +103,7 @@ export function validateParsedLines(lines: ParsedLine[], inputs: ProjectInput[],
       });
     }
 
-    if (shouldValidateValue && valueSpec && valueText && !matchedOption && expectsOnlyOptions(valueSpec)) {
+    if (shouldValidateValue && valueSpec && valueText && !matchedOption && !valueUsesVariable && expectsOnlyOptions(valueSpec)) {
       problems.push({
         id: `option-${line.lineNumber}`,
         lineNumber: line.lineNumber,
@@ -106,6 +118,7 @@ export function validateParsedLines(lines: ParsedLine[], inputs: ProjectInput[],
       valueSpec?.kinds.includes('number') &&
       valueText &&
       !matchedOption &&
+      !valueUsesVariable &&
       !line.reference &&
       !isNumericValue(valueText)
     ) {
@@ -119,7 +132,7 @@ export function validateParsedLines(lines: ParsedLine[], inputs: ProjectInput[],
     }
 
     const requiresConcreteReference =
-      command.requiresFileReference && !matchedOption && !hasNonFileValueAlternative(valueSpec);
+      command.requiresFileReference && !matchedOption && !valueUsesVariable && !hasNonFileValueAlternative(valueSpec);
 
     if (requiresConcreteReference && line.hasAssignment && !line.reference) {
       problems.push({
@@ -194,6 +207,68 @@ export function validateParsedLines(lines: ParsedLine[], inputs: ProjectInput[],
   );
 }
 
+function validateSymbols(symbols: TuflowSymbolIndex, knownVariableNames: Set<string>): Problem[] {
+  const problems: Problem[] = [];
+
+  symbols.variables
+    .filter((variable) => variable.hasDelimitedName)
+    .forEach((variable) => {
+      problems.push({
+        id: `variable-definition-${variable.lineNumber}`,
+        lineNumber: variable.lineNumber,
+        severity: 'warning',
+        message: `"Set Variable" defines "${variable.name}" with <<...>> delimiters.`,
+        suggestion: `Use "Set Variable ${variable.name} == ${variable.value}" when defining the variable.`
+      });
+    });
+
+  symbols.malformedVariableReferences.forEach((reference, index) => {
+    problems.push({
+      id: `malformed-variable-${reference.lineNumber}-${index}`,
+      lineNumber: reference.lineNumber,
+      severity: 'warning',
+      message: `Malformed variable reference "${reference.raw}".`,
+      suggestion: 'Use variable references in the form <<VARIABLE_NAME>>.'
+    });
+  });
+
+  symbols.variableReferences
+    .filter((reference) => !knownVariableNames.has(reference.name.toLowerCase()))
+    .forEach((reference) => {
+      problems.push({
+        id: `unknown-variable-${reference.lineNumber}-${reference.name}`,
+        lineNumber: reference.lineNumber,
+        severity: 'info',
+        message: `Variable "${reference.name}" is not defined in the active file.`,
+        suggestion: 'Define it with Set Variable, Model Events, Model Scenarios, or an event/scenario command in this file.'
+      });
+    });
+
+  symbols.placeholders
+    .filter((placeholder) => !placeholder.isValid)
+    .forEach((placeholder, index) => {
+      problems.push({
+        id: `placeholder-${placeholder.lineNumber}-${index}`,
+        lineNumber: placeholder.lineNumber,
+        severity: 'warning',
+        message: `Invalid event/scenario filename placeholder "${placeholder.raw}".`,
+        suggestion: 'Use ~s~, ~s1~ to ~s9~, ~e~, or ~e1~ to ~e9~.'
+      });
+    });
+
+  symbols.logicProblems.forEach((problem, index) => {
+    problems.push({
+      id: `logic-${problem.lineNumber}-${index}`,
+      lineNumber: problem.lineNumber,
+      severity: problem.severity,
+      message: problem.message,
+      suggestion: problem.suggestion
+    });
+  });
+
+  return problems;
+}
+
 function cleanValue(value: string): string {
   return value.trim().replace(/^(['"])(.*)\1$/, '$2').trim();
 }
@@ -245,6 +320,10 @@ function shouldCheckFileAvailability(line: ParsedLine, valueSpec: CommandValueSp
 
 function isNumericValue(value: string): boolean {
   return /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?%?$/i.test(value.trim());
+}
+
+function hasVariableReference(value: string): boolean {
+  return /<<\s*[^<>]+?\s*>>/.test(value);
 }
 
 function expectedValueSuggestion(valueSpec: CommandValueSpec | undefined): string | undefined {

@@ -88,7 +88,8 @@ function findPlaceholderCommand(normalised: string): TuflowCommand | undefined {
   return commandsByLooseName.find((command) => {
     if (!hasPlaceholder(command.name)) return false;
     const fixedTokens = commandTokens(command.name).filter((token) => !isPlaceholderToken(token));
-    return fixedTokens.length > 0 && normalised === fixedTokens.join(' ');
+    const fixedName = fixedTokens.join(' ');
+    return fixedTokens.length > 0 && (normalised === fixedName || normalised.startsWith(`${fixedName} `));
   });
 }
 

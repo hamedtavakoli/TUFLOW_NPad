@@ -205,4 +205,73 @@ describe('validateTuflowText', () => {
       message: 'Referenced input "results\\check.shp" is inside an excluded folder.'
     }));
   });
+
+  it('warns when Set Variable uses reference delimiters in the definition name', () => {
+    const problems = validateTuflowText('Set Variable <<START_TIME>> == 1', []);
+
+    expect(problems).toContainEqual(expect.objectContaining({
+      id: 'variable-definition-1',
+      severity: 'warning',
+      message: '"Set Variable" defines "START_TIME" with <<...>> delimiters.'
+    }));
+  });
+
+  it('does not warn for active-file variable references that are defined in the active file', () => {
+    const problems = validateTuflowText('Set Variable START_TIME == 1\nStart Time == <<START_TIME>>', []);
+
+    expect(problems.some((problem) => problem.id.startsWith('unknown-variable'))).toBe(false);
+    expect(problems.some((problem) => problem.id.startsWith('command-token'))).toBe(false);
+  });
+
+  it('accepts active-file variables in numeric value slots', () => {
+    const problems = validateTuflowText('Set Variable sos == 2\nTimestep == <<sos>>', []);
+
+    expect(problems.some((problem) => problem.id.startsWith('number'))).toBe(false);
+    expect(problems.some((problem) => problem.id.startsWith('unknown-variable'))).toBe(false);
+  });
+
+  it('accepts variables in option-only value slots', () => {
+    const problems = validateTuflowText('Set Variable CHECK_BOUNDS == ON\nMI Projection Check Ignore Bounds == <<CHECK_BOUNDS>>', []);
+
+    expect(problems.some((problem) => problem.id.startsWith('option'))).toBe(false);
+  });
+
+  it('accepts variables in file reference value slots', () => {
+    const problems = validateTuflowText('Set Variable BC_FILE == bc\\model.tbc\nBC Control File == <<BC_FILE>>', []);
+
+    expect(problems.some((problem) => problem.id.startsWith('empty-ref'))).toBe(false);
+  });
+
+  it('reports variable references that are not defined in the active file', () => {
+    const problems = validateTuflowText('Start Time == <<START_TIME>>', []);
+
+    expect(problems).toContainEqual(expect.objectContaining({
+      id: 'unknown-variable-1-START_TIME',
+      severity: 'info',
+      message: 'Variable "START_TIME" is not defined in the active file.'
+    }));
+  });
+
+  it('accepts scenario and event names as active-file variables', () => {
+    const problems = validateTuflowText('Model Scenarios == 5m\nModel Events == 01AEP\nStart Time == <<5m>>\nEnd Time == <<01AEP>>', []);
+
+    expect(problems.some((problem) => problem.id.startsWith('unknown-variable'))).toBe(false);
+  });
+
+  it('warns for invalid event and scenario filename placeholders', () => {
+    const problems = validateTuflowText('Output Folder == results\\~s10~\\~e0~\\', []);
+
+    expect(problems).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'placeholder-1-0',
+        severity: 'warning',
+        message: 'Invalid event/scenario filename placeholder "~s10~".'
+      }),
+      expect.objectContaining({
+        id: 'placeholder-1-1',
+        severity: 'warning',
+        message: 'Invalid event/scenario filename placeholder "~e0~".'
+      })
+    ]));
+  });
 });

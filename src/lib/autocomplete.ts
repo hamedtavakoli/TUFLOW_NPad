@@ -1,14 +1,23 @@
 import { commandStartsWith, findCommand, tuflowCommands } from './commands';
 import { getExtension } from './parser';
 import type { ProjectInput, Suggestion } from './types';
+import { activeFileVariableNames, type TuflowSymbolIndex } from './tuflowSymbols';
 
-export function getAutocompleteSuggestions(lineText: string, inputs: ProjectInput[]): Suggestion[] {
+const filenamePlaceholders = ['~s~', '~s1~', '~s2~', '~s3~', '~e~', '~e1~', '~e2~', '~e3~'];
+
+export function getAutocompleteSuggestions(lineText: string, inputs: ProjectInput[], symbols?: TuflowSymbolIndex): Suggestion[] {
   const assignmentIndex = lineText.indexOf('==');
   if (assignmentIndex >= 0) {
     const commandText = lineText.slice(0, assignmentIndex).trim();
     const partialValue = lineText.slice(assignmentIndex + 2).trim().replace(/^["']/, '');
     const partialReference = partialValue.toLowerCase();
     const command = findCommand(commandText);
+    const normalisedCommand = commandText.toLowerCase().replace(/\s+/g, ' ').trim();
+    const symbolSuggestions = symbols ? symbolValueSuggestions(normalisedCommand, partialValue, symbols) : [];
+    if (symbolSuggestions.length > 0) {
+      return symbolSuggestions;
+    }
+
     const allowedTypes = command?.allowedFileTypes ?? [];
     const shouldSuggestFiles = !command || command.requiresFileReference || allowedTypes.length > 0;
     const optionSuggestions =
@@ -36,7 +45,18 @@ export function getAutocompleteSuggestions(lineText: string, inputs: ProjectInpu
       })) : [];
 
     const seen = new Set<string>();
-    return [...optionSuggestions, ...fileSuggestions].filter((suggestion) => {
+    const placeholderSuggestions = partialReference.includes('~')
+      ? filenamePlaceholders
+        .filter((placeholder) => placeholder.toLowerCase().startsWith(partialReference.slice(partialReference.lastIndexOf('~'))))
+        .map((placeholder) => ({
+          label: placeholder,
+          detail: placeholder.startsWith('~s') ? 'Scenario filename placeholder' : 'Event filename placeholder',
+          insertText: placeholder,
+          kind: 'snippet' as const
+        }))
+      : [];
+
+    return [...optionSuggestions, ...fileSuggestions, ...placeholderSuggestions].filter((suggestion) => {
       const key = `${suggestion.kind}:${suggestion.label.toLowerCase()}`;
       if (seen.has(key)) return false;
       seen.add(key);
@@ -54,6 +74,52 @@ export function getAutocompleteSuggestions(lineText: string, inputs: ProjectInpu
     syntaxSuffix: commandSyntaxSuffix(command.name, command.syntax),
     summary: command.summary ? shortenText(command.summary, 90) : undefined
   }));
+}
+
+function symbolValueSuggestions(commandText: string, partialValue: string, symbols: TuflowSymbolIndex): Suggestion[] {
+  if (/^set variable(?:\s|$)/.test(commandText)) {
+    return [];
+  }
+
+  const trimmed = partialValue.trim();
+  const lowerTrimmed = trimmed.toLowerCase();
+
+  if (commandText === 'if scenario' || commandText === 'else if scenario') {
+    return symbols.scenarios
+      .filter((symbol) => symbol.name.toLowerCase().startsWith(lowerTrimmed))
+      .map((symbol) => ({
+        label: symbol.name,
+        detail: `Scenario - active file line ${symbol.lineNumber}`,
+        insertText: symbol.name,
+        kind: 'keyword' as const
+      }));
+  }
+
+  if (commandText === 'if event' || commandText === 'else if event') {
+    return symbols.events
+      .filter((symbol) => symbol.name.toLowerCase().startsWith(lowerTrimmed))
+      .map((symbol) => ({
+        label: symbol.name,
+        detail: `Event - active file line ${symbol.lineNumber}`,
+        insertText: symbol.name,
+        kind: 'keyword' as const
+      }));
+  }
+
+  const variableStart = trimmed.lastIndexOf('<<');
+  if (variableStart >= 0 && trimmed.indexOf('>>', variableStart) < 0) {
+    const partialName = trimmed.slice(variableStart + 2).toLowerCase();
+    return activeFileVariableNames(symbols)
+      .filter((name) => name.toLowerCase().startsWith(partialName))
+      .map((name) => ({
+        label: `<<${name}>>`,
+        detail: 'Variable - active file',
+        insertText: `<<${name}>>`,
+        kind: 'snippet' as const
+      }));
+  }
+
+  return [];
 }
 
 export function commandSuggestionDetail(commandName: string, syntax: string, summary: string | undefined): string {

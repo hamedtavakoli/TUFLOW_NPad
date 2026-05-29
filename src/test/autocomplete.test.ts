@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { classifyInput, commandSuggestionDetail, commandSyntaxSuffix, getAutocompleteSuggestions } from '../lib/autocomplete';
 import { completionStart } from '../lib/completionRange';
+import { buildTuflowSymbolIndex } from '../lib/tuflowSymbols';
 import type { Suggestion } from '../lib/types';
 
 describe('getAutocompleteSuggestions', () => {
@@ -66,6 +67,49 @@ describe('getAutocompleteSuggestions', () => {
       expect.objectContaining({ label: 'ON', kind: 'keyword' }),
       expect.objectContaining({ label: 'OFF', kind: 'keyword' })
     ]);
+  });
+
+  it('suggests active-file variables after a variable reference opener', () => {
+    const symbols = buildTuflowSymbolIndex('Set Variable START_TIME == 1');
+    const suggestions = getAutocompleteSuggestions('Start Time == <<', [], symbols);
+
+    expect(suggestions).toContainEqual(expect.objectContaining({
+      label: '<<START_TIME>>',
+      insertText: '<<START_TIME>>',
+      kind: 'snippet'
+    }));
+  });
+
+  it('suggests active-file scenarios and events in logic conditions', () => {
+    const symbols = buildTuflowSymbolIndex('Model Scenarios == 5m | 10m\nModel Events == 01AEP | 02AEP');
+
+    expect(getAutocompleteSuggestions('If Scenario == 1', [], symbols)).toContainEqual(expect.objectContaining({
+      label: '10m',
+      insertText: '10m',
+      kind: 'keyword'
+    }));
+    expect(getAutocompleteSuggestions('If Event == 02', [], symbols)).toContainEqual(expect.objectContaining({
+      label: '02AEP',
+      insertText: '02AEP',
+      kind: 'keyword'
+    }));
+  });
+
+  it('does not suggest reference delimiters while defining a variable name', () => {
+    const symbols = buildTuflowSymbolIndex('Set Variable START_TIME == 1');
+    const suggestions = getAutocompleteSuggestions('Set Variable << == ', [], symbols);
+
+    expect(suggestions.some((suggestion) => suggestion.insertText.includes('<<START_TIME>>'))).toBe(false);
+  });
+
+  it('suggests event and scenario filename placeholders in value context', () => {
+    const suggestions = getAutocompleteSuggestions('Output Folder == ~s', [], buildTuflowSymbolIndex(''));
+
+    expect(suggestions).toContainEqual(expect.objectContaining({
+      label: '~s1~',
+      insertText: '~s1~',
+      kind: 'snippet'
+    }));
   });
 
 });

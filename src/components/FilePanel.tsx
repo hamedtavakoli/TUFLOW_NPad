@@ -75,7 +75,7 @@ export function FilePanel({
   const displayedFiles = filteredFiles;
   const typeGroups = useMemo(() => groupProjectBrowserFilesByTuflowType(displayedFiles, typeFilter), [displayedFiles, typeFilter]);
   const filteredTree = useMemo(
-    () => buildProjectFileTree(projectRootName ?? 'Project Root', displayedFiles, projectFileIndex?.folders ?? []),
+    () => buildProjectFileTree(projectRootName ?? 'Model Root', displayedFiles, projectFileIndex?.folders ?? []),
     [displayedFiles, extensionFilter, fileSearch, projectFileIndex?.folders, projectRootName, typeFilter]
   );
   const visibleTreeRows = useMemo(
@@ -91,15 +91,16 @@ export function FilePanel({
     <aside className="file-panel">
       <div className="panel-header">
         <div>
-          <h2>Project</h2>
-          <p>{projectRootName ? 'Root indexed' : 'No active root'}</p>
+          <h2>Project Files</h2>
+          <p>{projectRootName ? 'Model root indexed' : 'No model root'}</p>
         </div>
       </div>
 
+      <div className="project-kicker">Model Root</div>
       <div className="project-actions">
-        <label className="project-action primary" title="Select project root">
+        <label className="project-action primary" title="Choose model root">
           <FolderCheck size={17} />
-          Select Root
+          Choose Root
           <input
             multiple
             type="file"
@@ -113,54 +114,23 @@ export function FilePanel({
             onChange={(event) => onRegisterProjectRootFiles(event.target.files)}
           />
         </label>
-        <button type="button" className="project-action" onClick={onRefreshProjectRoot} title="Refresh project index">
+        <button type="button" className="project-action" onClick={onRefreshProjectRoot} title="Refresh file index">
           <RefreshCw size={17} />
           Refresh
         </button>
       </div>
 
       <div className="project-root-status">
-        <strong>{projectRootName ?? 'No project root selected'}</strong>
-        <span>{projectRootName ? `${projectFileCount} files indexed` : 'Select a root folder to validate file references.'}</span>
+        <strong>{projectRootName ?? 'No model root selected'}</strong>
+        <span>{projectRootName ? `${projectFileCount} indexed files` : 'Choose a model root to check references.'}</span>
         {projectRootName ? <span>Last indexed {lastIndexedAt ?? '-'}</span> : null}
       </div>
 
       <div className="project-validation-state">{validationStatus}</div>
 
-      <div className="project-exclusions">
-        <button type="button" className="project-collapsible-head" onClick={() => setShowExclusions((show) => !show)}>
-          <ChevronRight size={14} className={showExclusions ? 'expanded' : ''} />
-          <h3>Excluded Folders</h3>
-          <span>{excludedFolderNames.length}</span>
-        </button>
-        {showExclusions ? (
-          <>
-            <div className="project-exclusion-chips">
-              {excludedFolderNames.map((name) => (
-                <button type="button" key={name} onClick={() => onRemoveExcludedFolder(name)} title={`Include ${name} on next refresh`}>
-                  {name}
-                  <X size={12} />
-                </button>
-              ))}
-            </div>
-            <form
-              className="project-exclusion-add"
-              onSubmit={(event) => {
-                event.preventDefault();
-                onAddExcludedFolder(excludedDraft);
-                setExcludedDraft('');
-              }}
-            >
-              <input value={excludedDraft} placeholder="Add folder name" onChange={(event) => setExcludedDraft(event.target.value)} />
-              <button type="submit">Add</button>
-            </form>
-          </>
-        ) : null}
-      </div>
-
       <div className="project-file-browser">
         <div className="project-file-browser-head">
-          <h3>Project File Browser</h3>
+          <h3>Project Files</h3>
           <span>{filteredFiles.length} match{filteredFiles.length === 1 ? '' : 'es'}</span>
         </div>
         <input
@@ -189,7 +159,7 @@ export function FilePanel({
         <div className="project-file-filters">
           {viewMode === 'tree' ? (
             <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
-              <option value="all">All tree categories</option>
+              <option value="all">All types</option>
               {fileTypes.map((type) => (
                 <option key={type} value={type}>{type}</option>
               ))}
@@ -249,6 +219,37 @@ export function FilePanel({
             ))}
           </div>
         )}
+      </div>
+
+      <div className="project-exclusions">
+        <button type="button" className="project-collapsible-head" onClick={() => setShowExclusions((show) => !show)}>
+          <ChevronRight size={14} className={showExclusions ? 'expanded' : ''} />
+          <h3>Ignored Folders</h3>
+          <span>{excludedFolderNames.length}</span>
+        </button>
+        {showExclusions ? (
+          <>
+            <div className="project-exclusion-chips">
+              {excludedFolderNames.map((name) => (
+                <button type="button" key={name} onClick={() => onRemoveExcludedFolder(name)} title={`Include ${name} on next refresh`}>
+                  {name}
+                  <X size={12} />
+                </button>
+              ))}
+            </div>
+            <form
+              className="project-exclusion-add"
+              onSubmit={(event) => {
+                event.preventDefault();
+                onAddExcludedFolder(excludedDraft);
+                setExcludedDraft('');
+              }}
+            >
+              <input value={excludedDraft} placeholder="Add folder name" onChange={(event) => setExcludedDraft(event.target.value)} />
+              <button type="submit">Add</button>
+            </form>
+          </>
+        ) : null}
       </div>
     </aside>
   );

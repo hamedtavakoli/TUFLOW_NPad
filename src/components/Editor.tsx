@@ -1,8 +1,16 @@
 import { useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
 import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
-import { autocompletion, type Completion, type CompletionContext } from '@codemirror/autocomplete';
+import {
+  acceptCompletion,
+  autocompletion,
+  insertCompletionText,
+  selectedCompletion,
+  startCompletion,
+  type Completion,
+  type CompletionContext
+} from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { Compartment, EditorState, type Extension } from '@codemirror/state';
+import { Compartment, EditorState, Prec, type Extension } from '@codemirror/state';
 import {
   Decoration,
   EditorView,
@@ -19,6 +27,7 @@ import { getAutocompleteSuggestions } from '../lib/autocomplete';
 import { completionStart } from '../lib/completionRange';
 import type { EditorLanguage } from '../lib/editorLanguage';
 import type { Problem, ProjectInput, Suggestion } from '../lib/types';
+import type { TuflowSymbolIndex } from '../lib/tuflowSymbols';
 import { parseTuflowLine } from '../tuflow/parser/tuflowParser';
 import { tokenizeTuflowLine } from '../tuflow/editor/tuflowHighlighter';
 
@@ -50,6 +59,7 @@ interface EditorProps {
   onUndo: () => void;
   onRedo: () => void;
   inputs: ProjectInput[];
+  symbols?: TuflowSymbolIndex;
   problems: Problem[];
   editorLanguage: EditorLanguage;
   activeLine: number;
@@ -77,6 +87,7 @@ export function Editor({
   onUndo,
   onRedo,
   inputs,
+  symbols,
   problems,
   editorLanguage,
   onActiveLineChange,
@@ -93,11 +104,13 @@ export function Editor({
   const onChangeRef = useRef(onChange);
   const onActiveLineChangeRef = useRef(onActiveLineChange);
   const onViewStateChangeRef = useRef(onViewStateChange);
+  const editorLanguageRef = useRef(editorLanguage);
   const valueRef = useRef(value);
 
   onChangeRef.current = onChange;
   onActiveLineChangeRef.current = onActiveLineChange;
   onViewStateChangeRef.current = onViewStateChange;
+  editorLanguageRef.current = editorLanguage;
   valueRef.current = value;
 
   const problemLines = useMemo(() => new Map(problems.map((problem) => [problem.lineNumber, problem])), [problems]);
@@ -118,11 +131,12 @@ export function Editor({
           keymap.of([...defaultKeymap, ...historyKeymap]),
           syntaxCompartment.of(syntaxDecorations(editorLanguage)),
           problemCompartment.of(problemDecorations(editorLanguage, problemLines)),
-          inputCompartment.of(autocompleteFromInputs(editorLanguage, inputs)),
+          inputCompartment.of(autocompleteFromInputs(editorLanguage, inputs, symbols)),
           searchCompartment.of(searchDecorations(search)),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
               onChangeRef.current(update.state.doc.toString());
+              maybeStartValueCompletion(update, editorLanguageRef.current);
             }
             if (update.docChanged || update.selectionSet || update.viewportChanged) {
               captureCodeMirrorViewState(update.view, onActiveLineChangeRef.current, onViewStateChangeRef.current);
@@ -131,9 +145,9 @@ export function Editor({
           EditorView.theme({
             '&': { height: '100%' },
             '.cm-scroller': {
-              fontFamily: '"Cascadia Mono", Consolas, monospace',
-              fontSize: '14px',
-              lineHeight: '22px',
+              fontFamily: '"Cascadia Code", "Cascadia Mono", Consolas, "Courier New", monospace',
+              fontSize: '12px',
+              lineHeight: '1.65',
               overflow: 'auto'
             },
             '.cm-content': {
@@ -142,10 +156,10 @@ export function Editor({
             '.cm-gutters': {
               backgroundColor: '#f0f4f7',
               color: '#718093',
-              borderRight: '1px solid #d7dee5'
+              borderRight: '0.5px solid #d7dee5'
             },
             '.cm-activeLine': {
-              backgroundColor: '#eaf5f6'
+              backgroundColor: 'rgba(15, 118, 110, 0.06)'
             },
             '.cm-activeLineGutter': {
               backgroundColor: '#dcecef',
@@ -156,9 +170,9 @@ export function Editor({
               backgroundColor: 'rgba(13, 137, 148, 0.22) !important'
             },
             '.cm-tooltip': {
-              border: '1px solid #b8c4cf',
-              borderRadius: '8px',
-              boxShadow: '0 18px 40px rgba(24, 36, 50, 0.16)',
+              border: '0.5px solid #b8c4cf',
+              borderRadius: '6px',
+              boxShadow: 'none',
               overflow: 'hidden'
             }
           })
@@ -199,8 +213,8 @@ export function Editor({
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
-    view.dispatch({ effects: inputCompartment.reconfigure(autocompleteFromInputs(editorLanguage, inputs)) });
-  }, [editorLanguage, inputs]);
+    view.dispatch({ effects: inputCompartment.reconfigure(autocompleteFromInputs(editorLanguage, inputs, symbols)) });
+  }, [editorLanguage, inputs, symbols]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -347,31 +361,37 @@ function restoreCodeMirrorViewState(view: EditorView, viewState: EditorViewState
   onActiveLineChange(view.state.doc.lineAt(safeStart).number);
 }
 
-function autocompleteFromInputs(editorLanguage: EditorLanguage, inputs: ProjectInput[]): Extension {
+function autocompleteFromInputs(editorLanguage: EditorLanguage, inputs: ProjectInput[], symbols?: TuflowSymbolIndex): Extension {
   if (editorLanguage !== 'tuflow') return [];
 
-  return autocompletion({
-    activateOnTyping: true,
-    addToOptions: [
-      {
-        render: (completion) => renderCommandCompletionSummary(completion),
-        position: 85
-      }
-    ],
-    override: [
-      (context: CompletionContext) => {
-        const line = context.state.doc.lineAt(context.pos);
-        const prefix = line.text.slice(0, context.pos - line.from);
-        const suggestions = getAutocompleteSuggestions(prefix, inputs);
-        if (!context.explicit && suggestions.length === 0) return null;
-        const from = completionStart(line.text, context.pos - line.from, suggestions);
-        return {
-          from: line.from + from,
-          options: suggestions.map(toCompletion)
-        };
-      }
-    ]
-  });
+  return [
+    Prec.highest(keymap.of([
+      { key: 'Tab', run: acceptFullCompletion },
+      { key: 'ArrowRight', run: acceptCompletionWord(inputs, symbols) }
+    ])),
+    autocompletion({
+      activateOnTyping: true,
+      addToOptions: [
+        {
+          render: (completion) => renderCommandCompletionSummary(completion),
+          position: 85
+        }
+      ],
+      override: [
+        (context: CompletionContext) => {
+          const line = context.state.doc.lineAt(context.pos);
+          const prefix = line.text.slice(0, context.pos - line.from);
+          const suggestions = getAutocompleteSuggestions(prefix, inputs, symbols);
+          if (!context.explicit && suggestions.length === 0) return null;
+          const from = completionStart(line.text, context.pos - line.from, suggestions);
+          return {
+            from: line.from + from,
+            options: suggestions.map(toCompletion)
+          };
+        }
+      ]
+    })
+  ];
 }
 
 function syntaxDecorations(editorLanguage: EditorLanguage): Extension {
@@ -403,6 +423,86 @@ function renderCommandCompletionSummary(completion: Completion): HTMLElement | n
   summary.className = 'cm-tuflow-completion-summary';
   summary.textContent = tuflowCompletion.summary;
   return summary;
+}
+
+function acceptFullCompletion(view: EditorView): boolean {
+  const completion = selectedCompletion(view.state);
+  if (!completion) return false;
+
+  const completionText = completionInsertText(completion);
+  const shouldRestart = shouldRestartCompletionAfterInsert(completionText);
+  const accepted = acceptCompletion(view);
+  if (accepted && shouldRestart) {
+    restartCompletion(view);
+  }
+  return accepted;
+}
+
+function acceptCompletionWord(inputs: ProjectInput[], symbols?: TuflowSymbolIndex) {
+  return (view: EditorView): boolean => {
+    const completion = selectedCompletion(view.state);
+    if (!completion) return false;
+
+    const selection = view.state.selection.main;
+    if (!selection.empty) return false;
+
+    const line = view.state.doc.lineAt(selection.head);
+    const column = selection.head - line.from;
+    const prefix = line.text.slice(0, column);
+    const suggestions = getAutocompleteSuggestions(prefix, inputs, symbols);
+    if (suggestions.length === 0) return false;
+
+    const from = line.from + completionStart(line.text, column, suggestions);
+    const current = view.state.doc.sliceString(from, selection.head);
+    const completionText = completionInsertText(completion);
+    const nextText = nextCompletionWord(completionText, current);
+    if (!nextText || nextText.toLowerCase() === current.toLowerCase()) {
+      return acceptCompletion(view);
+    }
+
+    view.dispatch({
+      ...insertCompletionText(view.state, nextText, from, selection.head),
+      userEvent: 'input.complete'
+    });
+    restartCompletion(view);
+    return true;
+  };
+}
+
+function completionInsertText(completion: Completion): string {
+  return typeof completion.apply === 'string' ? completion.apply : completion.label;
+}
+
+function nextCompletionWord(completionText: string, currentText: string): string | undefined {
+  if (!completionText) return undefined;
+  const currentLength = completionText.toLowerCase().startsWith(currentText.toLowerCase()) ? currentText.length : 0;
+  if (currentLength >= completionText.length) return undefined;
+
+  const nextSpace = completionText.indexOf(' ', Math.max(currentLength, 0));
+  if (nextSpace < 0) return completionText;
+  return completionText.slice(0, Math.min(nextSpace + 1, completionText.length));
+}
+
+function shouldRestartCompletionAfterInsert(text: string): boolean {
+  return text.endsWith('== ');
+}
+
+function restartCompletion(view: EditorView) {
+  requestAnimationFrame(() => startCompletion(view));
+}
+
+function maybeStartValueCompletion(update: ViewUpdate, editorLanguage: EditorLanguage) {
+  if (editorLanguage !== 'tuflow') return;
+  if (!update.transactions.some((transaction) => transaction.isUserEvent('input.type'))) return;
+
+  const selection = update.state.selection.main;
+  if (!selection.empty) return;
+
+  const line = update.state.doc.lineAt(selection.head);
+  const prefix = line.text.slice(0, selection.head - line.from);
+  if (/(?:^|\s)==\s*$/.test(prefix)) {
+    restartCompletion(update.view);
+  }
 }
 
 function tuflowSyntaxDecorations() {

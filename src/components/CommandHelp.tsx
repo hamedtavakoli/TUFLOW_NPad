@@ -37,12 +37,12 @@ export function CommandHelp({ activeLine, text, isEnabled }: CommandHelpProps) {
     <aside className="help-panel">
       <div className="panel-header command-help-header">
         <div>
-          <h2>Command Help</h2>
+          <h2>Command Guide</h2>
           <p>{activeTab === 'line' ? `Line ${activeLine}` : `${libraryCommands.length} command${libraryCommands.length === 1 ? '' : 's'}`}</p>
         </div>
         <div className="command-help-tabs" role="tablist" aria-label="Command help views">
           <button type="button" className={activeTab === 'line' ? 'active' : ''} onClick={() => setActiveTab('line')}>
-            Line
+            Line Guide
           </button>
           <button type="button" className={activeTab === 'library' ? 'active' : ''} onClick={() => setActiveTab('library')}>
             Library
@@ -70,7 +70,7 @@ export function CommandHelp({ activeLine, text, isEnabled }: CommandHelpProps) {
 
 function LineHelp({ isEnabled, command }: { isEnabled: boolean; command: TuflowCommand | undefined }) {
   if (!isEnabled) {
-    return <div className="empty-state">Line help is available for TUFLOW control files.</div>;
+    return <div className="empty-state">Command guide is available for TUFLOW control files.</div>;
   }
 
   return command ? (
@@ -156,12 +156,6 @@ function CommandDetailCard({ command, compact = false }: { command: TuflowComman
           <span className="category-pill">{command.category}</span>
           {command.isLegacy ? <span className="legacy-pill">Legacy</span> : null}
         </div>
-        {command.sourceUrl ? (
-          <a className="docs-link" href={command.sourceUrl} target="_blank" rel="noreferrer" title="Open TUFLOW documentation">
-            <ExternalLink size={14} />
-            Docs
-          </a>
-        ) : null}
       </div>
       <h3>{command.name}</h3>
       <pre className="help-syntax">{highlightTuflowLine(command.syntax, '')}</pre>
@@ -171,6 +165,12 @@ function CommandDetailCard({ command, compact = false }: { command: TuflowComman
           <h4>Expected value</h4>
           <ExpectedValue valueSpec={command.valueSpec} />
         </>
+      ) : null}
+      {command.sourceUrl ? (
+        <a className="docs-link" href={command.sourceUrl} target="_blank" rel="noreferrer" title="Open TUFLOW documentation">
+          <ExternalLink size={14} />
+          Docs
+        </a>
       ) : null}
     </div>
   );
