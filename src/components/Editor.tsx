@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
 import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 import { autocompletion, type Completion, type CompletionContext } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { Compartment, EditorState } from '@codemirror/state';
+import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import {
   Decoration,
   EditorView,
@@ -17,6 +17,7 @@ import {
 } from '@codemirror/view';
 import { getAutocompleteSuggestions } from '../lib/autocomplete';
 import { completionStart } from '../lib/completionRange';
+import type { EditorLanguage } from '../lib/editorLanguage';
 import type { Problem, ProjectInput, Suggestion } from '../lib/types';
 import { parseTuflowLine } from '../tuflow/parser/tuflowParser';
 import { tokenizeTuflowLine } from '../tuflow/editor/tuflowHighlighter';
@@ -50,6 +51,7 @@ interface EditorProps {
   onRedo: () => void;
   inputs: ProjectInput[];
   problems: Problem[];
+  editorLanguage: EditorLanguage;
   activeLine: number;
   onActiveLineChange: (line: number) => void;
   viewState: EditorViewState;
@@ -63,6 +65,7 @@ interface EditorProps {
 const problemCompartment = new Compartment();
 const inputCompartment = new Compartment();
 const searchCompartment = new Compartment();
+const syntaxCompartment = new Compartment();
 
 export function Editor({
   value,
@@ -75,6 +78,7 @@ export function Editor({
   onRedo,
   inputs,
   problems,
+  editorLanguage,
   onActiveLineChange,
   viewState,
   onViewStateChange,
@@ -112,9 +116,9 @@ export function Editor({
           drawSelection(),
           history(),
           keymap.of([...defaultKeymap, ...historyKeymap]),
-          tuflowSyntaxDecorations(),
-          problemCompartment.of(problemDecorations(problemLines)),
-          inputCompartment.of(autocompleteFromInputs(inputs)),
+          syntaxCompartment.of(syntaxDecorations(editorLanguage)),
+          problemCompartment.of(problemDecorations(editorLanguage, problemLines)),
+          inputCompartment.of(autocompleteFromInputs(editorLanguage, inputs)),
           searchCompartment.of(searchDecorations(search)),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
@@ -189,14 +193,20 @@ export function Editor({
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
-    view.dispatch({ effects: problemCompartment.reconfigure(problemDecorations(problemLines)) });
-  }, [problemLines]);
+    view.dispatch({ effects: problemCompartment.reconfigure(problemDecorations(editorLanguage, problemLines)) });
+  }, [editorLanguage, problemLines]);
 
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
-    view.dispatch({ effects: inputCompartment.reconfigure(autocompleteFromInputs(inputs)) });
-  }, [inputs]);
+    view.dispatch({ effects: inputCompartment.reconfigure(autocompleteFromInputs(editorLanguage, inputs)) });
+  }, [editorLanguage, inputs]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({ effects: syntaxCompartment.reconfigure(syntaxDecorations(editorLanguage)) });
+  }, [editorLanguage]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -337,7 +347,9 @@ function restoreCodeMirrorViewState(view: EditorView, viewState: EditorViewState
   onActiveLineChange(view.state.doc.lineAt(safeStart).number);
 }
 
-function autocompleteFromInputs(inputs: ProjectInput[]) {
+function autocompleteFromInputs(editorLanguage: EditorLanguage, inputs: ProjectInput[]): Extension {
+  if (editorLanguage !== 'tuflow') return [];
+
   return autocompletion({
     activateOnTyping: true,
     addToOptions: [
@@ -360,6 +372,12 @@ function autocompleteFromInputs(inputs: ProjectInput[]) {
       }
     ]
   });
+}
+
+function syntaxDecorations(editorLanguage: EditorLanguage): Extension {
+  if (editorLanguage === 'tuflow') return tuflowSyntaxDecorations();
+  if (editorLanguage === 'batch') return batchSyntaxDecorations();
+  return [];
 }
 
 function toCompletion(suggestion: Suggestion): Completion {
@@ -430,7 +448,77 @@ function buildSyntaxDecorations(view: EditorView) {
   return Decoration.set(decorations, true);
 }
 
-function problemDecorations(problemLines: Map<number, Problem>) {
+function batchSyntaxDecorations() {
+  return ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
+
+      constructor(view: EditorView) {
+        this.decorations = buildBatchSyntaxDecorations(view);
+      }
+
+      update(update: ViewUpdate) {
+        if (update.docChanged || update.viewportChanged) {
+          this.decorations = buildBatchSyntaxDecorations(update.view);
+        }
+      }
+    },
+    {
+      decorations: (plugin) => plugin.decorations
+    }
+  );
+}
+
+function buildBatchSyntaxDecorations(view: EditorView) {
+  const decorations = [];
+  const tokenPattern =
+    /"[^"]*"|%[^%\s]+%|![^!\s]+!|\b(?:assoc|call|cd|choice|cls|copy|del|dir|do|echo|else|endlocal|erase|errorlevel|exist|exit|for|goto|if|in|mkdir|move|not|pause|popd|pushd|rem|ren|rmdir|robocopy|set|setlocal|shift|start|timeout|title|xcopy)\b|&&|\|\||[|&<>]/gi;
+
+  for (const range of view.visibleRanges) {
+    let pos = range.from;
+    while (pos <= range.to) {
+      const line = view.state.doc.lineAt(pos);
+      const text = line.text;
+      const trimmedStart = text.search(/\S/);
+      const trimmed = trimmedStart >= 0 ? text.slice(trimmedStart) : '';
+
+      if (/^(?:::|rem\b)/i.test(trimmed)) {
+        decorations.push(Decoration.mark({ class: 'tok-batch-comment' }).range(line.from + trimmedStart, line.to));
+      } else {
+        const label = trimmed.match(/^:[^\s]+/);
+        if (label && trimmedStart >= 0) {
+          decorations.push(Decoration.mark({ class: 'tok-batch-label' }).range(line.from + trimmedStart, line.from + trimmedStart + label[0].length));
+        }
+
+        for (const match of text.matchAll(tokenPattern)) {
+          const token = match[0];
+          const start = line.from + (match.index ?? 0);
+          const end = start + token.length;
+          const className = batchTokenClass(token);
+          if (className) {
+            decorations.push(Decoration.mark({ class: className }).range(start, end));
+          }
+        }
+      }
+
+      if (line.to >= range.to) break;
+      pos = line.to + 1;
+    }
+  }
+
+  return Decoration.set(decorations, true);
+}
+
+function batchTokenClass(token: string): string | undefined {
+  if (/^"/.test(token)) return 'tok-batch-string';
+  if (/^%|^!/.test(token)) return 'tok-batch-variable';
+  if (/^(?:&&|\|\||[|&<>])$/.test(token)) return 'tok-batch-operator';
+  return 'tok-batch-keyword';
+}
+
+function problemDecorations(editorLanguage: EditorLanguage, problemLines: Map<number, Problem>): Extension {
+  if (editorLanguage !== 'tuflow') return [];
+
   return EditorView.decorations.compute([], (state) => {
     const decorations = [];
     for (const problem of problemLines.values()) {

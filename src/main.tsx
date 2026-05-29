@@ -6,9 +6,19 @@ import { FilePanel } from './components/FilePanel';
 import { ProblemsPanel } from './components/ProblemsPanel';
 import { CommandHelp } from './components/CommandHelp';
 import { classifyInput } from './lib/autocomplete';
+import {
+  createProjectFileIndex,
+  createProjectFileIndexFromDirectoryHandle,
+  createProjectFileIndexFromFileList,
+  defaultExcludedFolderNames,
+  isReadableProjectFile,
+  normaliseExcludedFolderNames,
+  readableProjectFileAccept
+} from './lib/projectFiles';
 import { validateTuflowText } from './lib/validator';
 import { formatTuflowText } from './lib/formatter';
-import type { ProjectInput } from './lib/types';
+import { getEditorLanguage, isTuflowEditorLanguage } from './lib/editorLanguage';
+import type { ProjectFileIndex, ProjectInput } from './lib/types';
 import packageJson from '../package.json';
 import './styles.css';
 
@@ -27,16 +37,6 @@ Read Materials File == materials\\materials.tmf
 Output Folder == results\\<<~s1~>>\\
 `;
 
-const starterInputs: ProjectInput[] = [
-  classifyInput('M01_001.tgc', 'model\\M01_001.tgc'),
-  classifyInput('M01_001.tbc', 'bc\\M01_001.tbc'),
-  classifyInput('design_events.tef', 'events\\design_events.tef'),
-  classifyInput('2d_code_M01.shp', 'gis\\2d_code_M01.shp'),
-  classifyInput('dem_5m.asc', 'grids\\dem_5m.asc'),
-  classifyInput('bc_dbase.csv', 'bc_dbase\\bc_dbase.csv'),
-  classifyInput('materials.tmf', 'materials\\materials.tmf')
-];
-
 interface OpenFileTab {
   id: string;
   name: string;
@@ -50,6 +50,7 @@ interface OpenFileTab {
   scrollLeft: number;
   undoStack: string[];
   redoStack: string[];
+  projectPath?: string;
 }
 
 const starterFile: OpenFileTab = {
@@ -69,23 +70,70 @@ const starterFile: OpenFileTab = {
 
 const historyLimit = 100;
 
+interface DirectoryHandleLike {
+  kind: 'directory';
+  name: string;
+  values(): AsyncIterable<{ kind: 'file'; name: string } | DirectoryHandleLike>;
+}
+
+type WindowWithDirectoryPicker = Window & {
+  showDirectoryPicker: () => Promise<DirectoryHandleLike>;
+};
+
 function App() {
   const [files, setFiles] = useState<OpenFileTab[]>([starterFile]);
   const [activeFileId, setActiveFileId] = useState(starterFile.id);
-  const [inputs, setInputs] = useState<ProjectInput[]>(starterInputs);
   const [requestedLine, setRequestedLine] = useState<{ fileId: string; lineNumber: number; nonce: number } | null>(null);
   const [search, setSearch] = useState('');
   const [showMissingInputProblems, setShowMissingInputProblems] = useState(false);
+  const [projectFileIndex, setProjectFileIndex] = useState<ProjectFileIndex | undefined>();
+  const [projectDirectoryHandle, setProjectDirectoryHandle] = useState<DirectoryHandleLike | undefined>();
+  const [excludedFolderNames, setExcludedFolderNames] = useState(defaultExcludedFolderNames);
+  const [lastIndexedAt, setLastIndexedAt] = useState<string | undefined>();
+  const [hasRunProjectValidation, setHasRunProjectValidation] = useState(false);
+  const [validationStatus, setValidationStatus] = useState('Select a project root to check referenced files.');
 
   const activeFile = files.find((file) => file.id === activeFileId) ?? files[0];
   const text = activeFile?.text ?? '';
   const activeLine = activeFile?.activeLine ?? 1;
+  const activeEditorLanguage = getEditorLanguage(activeFile?.projectPath ?? activeFile?.name ?? '');
+  const isActiveTuflowFile = isTuflowEditorLanguage(activeEditorLanguage);
   const hasUnsavedFiles = files.some((file) => file.text !== file.savedText);
-  const allProblems = useMemo(() => validateTuflowText(text, inputs), [text, inputs]);
+  const availabilityIndex = useMemo(
+    () =>
+      projectFileIndex
+        ? createProjectFileIndex(projectFileIndex.rootName, [
+            ...projectFileIndex.files.map((file) => file.path),
+            ...files.map((file) => file.name)
+          ], {
+            folders: projectFileIndex.folders.map((folder) => folder.path),
+            excludedFolderNames,
+            sources: projectFileSources(projectFileIndex)
+          })
+        : undefined,
+    [excludedFolderNames, files, projectFileIndex]
+  );
+  const projectInputs = useMemo(() => projectInputsFromIndex(availabilityIndex, files), [availabilityIndex, files]);
+  const allProblems = useMemo(
+    () =>
+      isActiveTuflowFile
+        ? validateTuflowText(text, projectInputs, {
+            checkProjectFiles: hasRunProjectValidation,
+            projectFileIndex: availabilityIndex
+          })
+        : [],
+    [availabilityIndex, hasRunProjectValidation, isActiveTuflowFile, projectInputs, text]
+  );
   const problems = useMemo(
     () => (showMissingInputProblems ? allProblems : allProblems.filter((problem) => !problem.id.startsWith('missing-input'))),
     [allProblems, showMissingInputProblems]
   );
+
+  useEffect(() => {
+    if (!hasRunProjectValidation) return;
+    const fileProblems = allProblems.filter((problem) => /^(missing-input|uncheckable-input)-/.test(problem.id));
+    setValidationStatus(fileProblems.length === 0 ? 'All referenced files are available.' : `${fileProblems.length} referenced file issue${fileProblems.length === 1 ? '' : 's'} found.`);
+  }, [allProblems, hasRunProjectValidation]);
 
   useEffect(() => {
     const warnBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -149,6 +197,8 @@ function App() {
   const selectFile = (id: string) => {
     setActiveFileId(id);
     setRequestedLine(null);
+    setHasRunProjectValidation(false);
+    setValidationStatus(projectFileIndex ? 'Ready to validate referenced files.' : 'Select a project root to check referenced files.');
   };
 
   const closeFile = (id: string) => {
@@ -193,9 +243,148 @@ function App() {
     setFiles((current) => current.map((file) => (file.id === activeFile.id ? { ...file, savedText: file.text } : file)));
   };
   const exportProblems = () => downloadText(`${stripExtension(activeFile.name)}-problems.json`, JSON.stringify(problems, null, 2));
+  const validateActiveFile = async () => {
+    if (!isActiveTuflowFile) {
+      setHasRunProjectValidation(false);
+      setShowMissingInputProblems(false);
+      setValidationStatus('TUFLOW validation is available for control files.');
+      return;
+    }
+
+    const index = availabilityIndex ?? await chooseProjectRoot();
+    if (!index) {
+      setValidationStatus('Project root is required for referenced file checks.');
+      return;
+    }
+
+    const validationProblems = validateTuflowText(text, projectInputs, {
+      checkProjectFiles: true,
+      projectFileIndex: index
+    });
+    const fileProblems = validationProblems.filter((problem) => /^(missing-input|uncheckable-input)-/.test(problem.id));
+
+    setHasRunProjectValidation(true);
+    setShowMissingInputProblems(true);
+    setValidationStatus(fileProblems.length === 0 ? 'All referenced files are available.' : `${fileProblems.length} referenced file issue${fileProblems.length === 1 ? '' : 's'} found.`);
+
+    const firstProblem = fileProblems[0] ?? validationProblems[0];
+    if (firstProblem) {
+      goToLine(firstProblem.lineNumber);
+    }
+  };
   const goToLine = (line: number) => {
     setActiveLineForFile(activeFile.id, line);
     setRequestedLine({ fileId: activeFile.id, lineNumber: line, nonce: Date.now() });
+  };
+
+  const chooseProjectRoot = async (): Promise<ProjectFileIndex | undefined> => {
+    if (!('showDirectoryPicker' in window)) {
+      window.alert('Use the Select Root button in the Project panel to select a root folder.');
+      return undefined;
+    }
+
+    try {
+      const handle = await (window as WindowWithDirectoryPicker).showDirectoryPicker();
+      const index = await createProjectFileIndexFromDirectoryHandle(handle, excludedFolderNames);
+      const nextIndex = withOpenTabs(index, files);
+      setProjectFileIndex(index);
+      setProjectDirectoryHandle(handle);
+      setLastIndexedAt(formatTime(new Date()));
+      setHasRunProjectValidation(false);
+      setValidationStatus(`${index.rootName} indexed with ${index.files.length} files.`);
+      return nextIndex;
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) {
+        setValidationStatus('Project root selection failed.');
+      }
+      return undefined;
+    }
+  };
+
+  const registerProjectRootFiles = (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    const index = createProjectFileIndexFromFileList(fileList, excludedFolderNames);
+    setProjectFileIndex(index);
+    setProjectDirectoryHandle(undefined);
+    setLastIndexedAt(formatTime(new Date()));
+    setHasRunProjectValidation(false);
+    setValidationStatus(`${index.rootName} indexed with ${index.files.length} files.`);
+  };
+
+  const openProjectFile = async (path: string) => {
+    const existing = files.find((file) => sameProjectPath(file.projectPath ?? file.name, path));
+    if (existing) {
+      selectFile(existing.id);
+      return;
+    }
+
+    const projectFile = projectFileIndex?.files.find((file) => sameProjectPath(file.path, path));
+    if (!projectFile || !isReadableProjectFile(projectFile) || !projectFile.source) {
+      setValidationStatus('File content unavailable. Select the project root again or choose a readable text file.');
+      return;
+    }
+
+    const sourceFile = projectFile.source.kind === 'file' ? projectFile.source.file : await projectFile.source.handle.getFile();
+    const nextText = normaliseEditorText(await sourceFile.text());
+    const nextFile: OpenFileTab = {
+      id: `${projectFile.path}-${sourceFile.lastModified}-${sourceFile.size}-${crypto.randomUUID()}`,
+      name: projectFile.name,
+      text: nextText,
+      savedText: nextText,
+      activeLine: 1,
+      cursorOffset: 0,
+      selectionStart: 0,
+      selectionEnd: 0,
+      scrollTop: 0,
+      scrollLeft: 0,
+      undoStack: [],
+      redoStack: [],
+      projectPath: projectFile.path
+    };
+
+    setFiles((current) => [...current, nextFile]);
+    selectFile(nextFile.id);
+  };
+
+  const refreshProjectRoot = async () => {
+    if (!projectDirectoryHandle) {
+      await chooseProjectRoot();
+      return;
+    }
+
+    try {
+      const index = await createProjectFileIndexFromDirectoryHandle(projectDirectoryHandle, excludedFolderNames);
+      setProjectFileIndex(index);
+      setLastIndexedAt(formatTime(new Date()));
+      setHasRunProjectValidation(false);
+      setValidationStatus(`${index.rootName} refreshed with ${index.files.length} files.`);
+    } catch {
+      setValidationStatus('Project root refresh failed. Select the root again.');
+    }
+  };
+
+  const addExcludedFolder = (name: string) => {
+    const nextNames = normaliseExcludedFolderNames([...excludedFolderNames, name]);
+    setExcludedFolderNames(nextNames);
+    setProjectFileIndex((current) => current ? createProjectFileIndex(current.rootName, current.files.map((file) => file.path), {
+      folders: current.folders.map((folder) => folder.path),
+      excludedFolderNames: nextNames,
+      sources: projectFileSources(current)
+    }) : current);
+    setHasRunProjectValidation(false);
+    setValidationStatus('Exclusions updated. Refresh project index for folder scan changes.');
+  };
+
+  const removeExcludedFolder = (name: string) => {
+    const nextNames = normaliseExcludedFolderNames(excludedFolderNames.filter((folderName) => folderName !== name));
+    setExcludedFolderNames(nextNames);
+    setProjectFileIndex((current) => current ? createProjectFileIndex(current.rootName, current.files.map((file) => file.path), {
+      folders: current.folders.map((folder) => folder.path),
+      excludedFolderNames: nextNames,
+      sources: projectFileSources(current)
+    }) : current);
+    setHasRunProjectValidation(false);
+    setValidationStatus('Exclusions updated. Refresh project index for folder scan changes.');
   };
 
   const setActiveLineForFile = (fileId: string, line: number) => {
@@ -246,7 +435,7 @@ function App() {
           <label className="button-like" title="Open files">
             <FolderOpen size={17} />
             Open
-            <input type="file" multiple accept=".tcf,.tgc,.tbc,.ecf,.tef,.trd,.tsoilf,.tmf,.txt,.csv,.dat,.ini,.cfg" onChange={(event) => openFiles(event, setFiles, selectFile)} />
+            <input type="file" multiple accept={readableProjectFileAccept} onChange={(event) => openFiles(event, setFiles, selectFile)} />
           </label>
           <button type="button" onClick={saveFile} title="Save active file">
             <Save size={17} />
@@ -260,11 +449,11 @@ function App() {
             <Redo2 size={17} />
             Redo
           </button>
-          <button type="button" onClick={() => goToLine(problems[0]?.lineNumber ?? activeLine)} title="Validate">
+          <button type="button" onClick={validateActiveFile} title="Validate referenced files">
             <PlayCircle size={17} />
             Validate
           </button>
-          <button type="button" onClick={() => updateActiveText(formatTuflowText(text), true)} title="Format assignments">
+          <button type="button" onClick={() => updateActiveText(formatTuflowText(text), true)} title="Format assignments" disabled={!isActiveTuflowFile}>
             <AlignLeft size={17} />
             Format
           </button>
@@ -272,11 +461,26 @@ function App() {
             <Download size={17} />
             Export
           </button>
+          <span className="validation-status" title={validationStatus}>{validationStatus}</span>
         </div>
       </header>
 
       <main className="workspace">
-        <FilePanel inputs={inputs} onAddInput={(input) => setInputs((current) => [...current, input])} onRemoveInput={(id) => setInputs((current) => current.filter((input) => input.id !== id))} />
+        <FilePanel
+          projectFileIndex={projectFileIndex}
+          projectRootName={projectFileIndex?.rootName}
+          projectFileCount={projectFileIndex?.files.length ?? 0}
+          lastIndexedAt={lastIndexedAt}
+          validationStatus={validationStatus}
+          excludedFolderNames={projectFileIndex?.excludedFolderNames ?? excludedFolderNames}
+          onChooseProjectRoot={chooseProjectRoot}
+          onRefreshProjectRoot={refreshProjectRoot}
+          onRegisterProjectRootFiles={registerProjectRootFiles}
+          onAddExcludedFolder={addExcludedFolder}
+          onRemoveExcludedFolder={removeExcludedFolder}
+          openProjectPaths={files.map((file) => file.projectPath ?? file.name)}
+          onOpenProjectFile={openProjectFile}
+        />
         <section className="editor-column">
           <Editor
             value={text}
@@ -287,8 +491,9 @@ function App() {
             onCloseFile={closeFile}
             onUndo={undo}
             onRedo={redo}
-            inputs={inputs}
+            inputs={projectInputs}
             problems={problems}
+            editorLanguage={activeEditorLanguage}
             activeLine={activeLine}
             onActiveLineChange={(line) => setActiveLineForFile(activeFile.id, line)}
             viewState={{
@@ -312,10 +517,51 @@ function App() {
             onSelectLine={goToLine}
           />
         </section>
-        <CommandHelp activeLine={activeLine} text={text} />
+        <CommandHelp activeLine={activeLine} text={text} isEnabled={isActiveTuflowFile} />
       </main>
     </div>
   );
+}
+
+function withOpenTabs(index: ProjectFileIndex, files: OpenFileTab[]): ProjectFileIndex {
+  return createProjectFileIndex(index.rootName, [
+    ...index.files.map((file) => file.path),
+    ...files.map((file) => file.name)
+  ], {
+    folders: index.folders.map((folder) => folder.path),
+    excludedFolderNames: index.excludedFolderNames,
+    sources: projectFileSources(index)
+  });
+}
+
+function projectFileSources(index: ProjectFileIndex): Map<string, ProjectFileIndex['files'][number]['source']> {
+  return new Map(
+    index.files
+      .filter((file) => file.source)
+      .map((file) => [file.path.toLowerCase(), file.source])
+  );
+}
+
+function projectInputsFromIndex(index: ProjectFileIndex | undefined, files: OpenFileTab[]): ProjectInput[] {
+  const seen = new Set<string>();
+  return [
+    ...(index?.files.map((file) => file.path) ?? []),
+    ...files.map((file) => file.name)
+  ].flatMap((path) => {
+    const key = path.toLowerCase();
+    if (seen.has(key)) return [];
+    seen.add(key);
+    const name = path.split(/[\\/]/).at(-1) ?? path;
+    return classifyInput(name, path);
+  });
+}
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function sameProjectPath(left: string, right: string): boolean {
+  return left.replaceAll('/', '\\').toLowerCase() === right.replaceAll('/', '\\').toLowerCase();
 }
 
 function downloadText(filename: string, content: string) {
@@ -343,7 +589,7 @@ async function openFiles(
 }
 
 async function readEditorFile(file: File): Promise<OpenFileTab> {
-  const text = await file.text();
+  const text = normaliseEditorText(await file.text());
   return {
     id: `${file.name}-${file.lastModified}-${file.size}-${crypto.randomUUID()}`,
     name: file.name,
@@ -356,8 +602,13 @@ async function readEditorFile(file: File): Promise<OpenFileTab> {
     scrollTop: 0,
     scrollLeft: 0,
     undoStack: [],
-    redoStack: []
+    redoStack: [],
+    projectPath: file.webkitRelativePath ? file.webkitRelativePath.replaceAll('/', '\\') : undefined
   };
+}
+
+function normaliseEditorText(text: string): string {
+  return text.replace(/\r\n?/g, '\n');
 }
 
 function stripExtension(filename: string) {

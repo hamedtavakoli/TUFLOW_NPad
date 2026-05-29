@@ -20,7 +20,7 @@ export function ProblemsPanel({
       <div className="panel-header compact">
         <h2>Problems</h2>
         <div className="problem-header-actions">
-          <label className="switch-control" title="Show warnings for files not registered in Project Inputs">
+          <label className="switch-control" title="Show project file availability warnings">
             <input
               type="checkbox"
               checked={showMissingInputProblems}

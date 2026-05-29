@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { classifyInput } from '../lib/autocomplete';
+import { createProjectFileIndex } from '../lib/projectFiles';
 import { validateTuflowText } from '../lib/validator';
 
 describe('validateTuflowText', () => {
-  it('warns when a referenced file is not registered', () => {
+  it('warns when a referenced file is not found in project files', () => {
     const problems = validateTuflowText('BC Control File == model\\missing.tbc', []);
 
     expect(problems.some((problem) => problem.id.startsWith('missing-input'))).toBe(true);
@@ -66,10 +67,10 @@ describe('validateTuflowText', () => {
 
     expect(problems.map((problem) => [problem.lineNumber, problem.severity, problem.message])).toEqual([
       [1, 'warning', '"gis\\missing.txt" does not match expected type for "BC Control File".'],
-      [1, 'warning', 'Referenced input "gis\\missing.txt" is not registered in the project panel.'],
+      [1, 'warning', 'Referenced input "gis\\missing.txt" was not found in the active project.'],
       [2, 'error', '"Cell Size" is missing the == assignment operator.'],
       [3, 'warning', '"gis\\missing.shp" does not match expected type for "Geometry Control File".'],
-      [3, 'warning', 'Referenced input "gis\\missing.shp" is not registered in the project panel.']
+      [3, 'warning', 'Referenced input "gis\\missing.shp" was not found in the active project.']
     ]);
   });
 
@@ -148,6 +149,60 @@ describe('validateTuflowText', () => {
       id: 'unexpected-assignment-1',
       severity: 'error',
       message: '"End Define" does not use the == assignment operator.'
+    }));
+  });
+
+  it('checks referenced files against a project root index when requested', () => {
+    const projectFileIndex = createProjectFileIndex('Model Root', ['model\\model.tbc']);
+    const problems = validateTuflowText('BC Control File == model\\missing.tbc', [], {
+      checkProjectFiles: true,
+      projectFileIndex
+    });
+
+    expect(problems).toContainEqual(expect.objectContaining({
+      id: 'missing-input-1',
+      message: 'Referenced input "model\\missing.tbc" was not found in Model Root.'
+    }));
+  });
+
+  it('does not treat output folders as missing project files', () => {
+    const projectFileIndex = createProjectFileIndex('Model Root', []);
+    const problems = validateTuflowText('Output Folder == results\\<<~s1~>>\\', [], {
+      checkProjectFiles: true,
+      projectFileIndex
+    });
+
+    expect(problems.some((problem) => problem.id.startsWith('missing-input'))).toBe(false);
+    expect(problems.some((problem) => problem.id.startsWith('uncheckable-input'))).toBe(false);
+  });
+
+  it('marks variable file references as uncheckable rather than missing', () => {
+    const projectFileIndex = createProjectFileIndex('Model Root', []);
+    const problems = validateTuflowText('BC Control File == bc\\<<~s1~>>.tbc', [], {
+      checkProjectFiles: true,
+      projectFileIndex
+    });
+
+    expect(problems).toContainEqual(expect.objectContaining({
+      id: 'uncheckable-input-1',
+      severity: 'info'
+    }));
+    expect(problems.some((problem) => problem.id.startsWith('missing-input'))).toBe(false);
+  });
+
+  it('reports references inside excluded folders as informational', () => {
+    const projectFileIndex = createProjectFileIndex('Model Root', [], {
+      excludedFolderNames: ['results']
+    });
+    const problems = validateTuflowText('Read GIS == results\\check.shp', [], {
+      checkProjectFiles: true,
+      projectFileIndex
+    });
+
+    expect(problems).toContainEqual(expect.objectContaining({
+      id: 'excluded-input-1',
+      severity: 'info',
+      message: 'Referenced input "results\\check.shp" is inside an excluded folder.'
     }));
   });
 });

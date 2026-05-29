@@ -33,6 +33,31 @@ export interface ProjectInput {
   extension: string;
 }
 
+export interface ProjectFileEntry {
+  name: string;
+  path: string;
+  extension: string;
+  source?: ProjectFileSource;
+}
+
+export type ProjectFileSource =
+  | { kind: 'handle'; handle: FileSystemFileHandle }
+  | { kind: 'file'; file: File };
+
+export interface ProjectFolderEntry {
+  name: string;
+  path: string;
+}
+
+export interface ProjectFileIndex {
+  rootName: string;
+  files: ProjectFileEntry[];
+  folders: ProjectFolderEntry[];
+  excludedFolderNames: string[];
+  pathSet: Set<string>;
+  nameSet: Set<string>;
+}
+
 export type InputType =
   | 'GIS'
   | 'Raster'

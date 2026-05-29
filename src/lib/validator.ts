@@ -1,6 +1,7 @@
 import { findCommand, findCommandInLooseLine, tuflowCommands } from './commands';
 import { getExtension, normaliseCommandName, parseTuflowText } from './parser';
-import type { ParsedLine, Problem, ProjectInput } from './types';
+import { checkProjectFileAvailability, createProjectFileIndexFromInputs } from './projectFiles';
+import type { ParsedLine, Problem, ProjectFileIndex, ProjectInput } from './types';
 import type { CommandValueSpec } from './valuePattern';
 import { checkTuflowCommandTokens } from '../tuflow/parser/tuflowParser';
 
@@ -10,12 +11,18 @@ const severityRank = {
   info: 2
 } as const;
 
-export function validateTuflowText(text: string, inputs: ProjectInput[]): Problem[] {
-  return validateParsedLines(parseTuflowText(text), inputs);
+interface ValidationOptions {
+  checkProjectFiles?: boolean;
+  projectFileIndex?: ProjectFileIndex;
 }
 
-export function validateParsedLines(lines: ParsedLine[], inputs: ProjectInput[]): Problem[] {
+export function validateTuflowText(text: string, inputs: ProjectInput[], options: ValidationOptions = {}): Problem[] {
+  return validateParsedLines(parseTuflowText(text), inputs, options);
+}
+
+export function validateParsedLines(lines: ParsedLine[], inputs: ProjectInput[], options: ValidationOptions = {}): Problem[] {
   const problems: Problem[] = [];
+  const availabilityIndex = options.projectFileIndex ?? createProjectFileIndexFromInputs('Project files', inputs);
 
   for (const line of lines) {
     if (line.isBlank || line.isComment) {
@@ -127,7 +134,6 @@ export function validateParsedLines(lines: ParsedLine[], inputs: ProjectInput[])
     if (line.reference) {
       const reference = line.reference;
       const extension = getExtension(reference);
-      const matchedInput = inputs.some((input) => samePath(input.path, reference) || input.name === reference);
 
       if (command.allowedFileTypes.length > 0 && extension && !command.allowedFileTypes.includes(extension)) {
         problems.push({
@@ -139,13 +145,42 @@ export function validateParsedLines(lines: ParsedLine[], inputs: ProjectInput[])
         });
       }
 
-      if (!matchedInput) {
+      if (options.checkProjectFiles && shouldCheckFileAvailability(line, valueSpec)) {
+        const availability = checkProjectFileAvailability(reference, availabilityIndex);
+        if (availability.status === 'missing') {
+          problems.push({
+            id: `missing-input-${line.lineNumber}`,
+            lineNumber: line.lineNumber,
+            severity: 'warning',
+            message: `Referenced input "${reference}" was not found in ${availabilityIndex.rootName}.`,
+            suggestion: options.projectFileIndex ? 'Check the path or select the correct project root.' : 'Select a project root or correct the path.'
+          });
+        }
+        if (availability.status === 'uncheckable') {
+          problems.push({
+            id: `uncheckable-input-${line.lineNumber}`,
+            lineNumber: line.lineNumber,
+            severity: 'info',
+            message: `Referenced input "${reference}" contains variables or wildcards and cannot be fully checked.`,
+            suggestion: 'Confirm the resolved TUFLOW scenario/event path exists.'
+          });
+        }
+        if (availability.status === 'excluded') {
+          problems.push({
+            id: `excluded-input-${line.lineNumber}`,
+            lineNumber: line.lineNumber,
+            severity: 'info',
+            message: `Referenced input "${reference}" is inside an excluded folder.`,
+            suggestion: 'Remove that folder from exclusions if this input should be validated.'
+          });
+        }
+      } else if (!options.checkProjectFiles && !inputs.some((input) => samePath(input.path, reference) || input.name === reference)) {
         problems.push({
           id: `missing-input-${line.lineNumber}`,
           lineNumber: line.lineNumber,
           severity: 'warning',
-          message: `Referenced input "${reference}" is not registered in the project panel.`,
-          suggestion: 'Add it to Project Inputs or correct the path.'
+          message: `Referenced input "${reference}" was not found in the active project.`,
+          suggestion: 'Select a project root or correct the path.'
         });
       }
     }
@@ -195,6 +230,17 @@ function hasNonFileValueAlternative(valueSpec: CommandValueSpec | undefined): bo
     }
     return !/\b(file|folder|layer|database|gis|grid|raster|tin|csv)\b/.test(normalised);
   });
+}
+
+function shouldCheckFileAvailability(line: ParsedLine, valueSpec: CommandValueSpec | undefined): boolean {
+  const reference = line.reference?.trim() ?? '';
+  if (!reference) {
+    return false;
+  }
+  if (/[\\/]$/.test(reference)) {
+    return false;
+  }
+  return !valueSpec?.kinds.includes('folder');
 }
 
 function isNumericValue(value: string): boolean {
