@@ -44,6 +44,16 @@ npm run build
 
 The production build may show a non-fatal large chunk warning because the app bundles CodeMirror and the TUFLOW command JSON.
 
+## GitHub Pages
+
+The app is configured for deployment at:
+
+```text
+https://hamedtavakoli.github.io/TUFLOW_NPad/
+```
+
+Deployment is handled by `.github/workflows/deploy-pages.yml` on pushes to `master`. In the GitHub repository settings, set Pages source to GitHub Actions.
+
 ## Key Files
 
 - `src/main.tsx` - app shell, tabs, Project Root state, validation status.
