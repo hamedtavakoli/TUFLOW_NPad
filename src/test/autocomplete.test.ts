@@ -16,7 +16,7 @@ describe('getAutocompleteSuggestions', () => {
     expect(suggestion.detail).toContain(' == [ <.tbc> ] - ');
     expect(suggestion.detail).not.toContain('BC Control File ==');
     expect(suggestion.syntaxSuffix).toBe(' == [ <.tbc> ]');
-    expect(suggestion.summary).toContain('Specifies the boundary control file');
+    expect(suggestion.summary).toContain('Specifies the file containing boundary conditions');
   });
 
   it('suggests registered files that match the command type', () => {

@@ -1,22 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import sampleTcf from '../../assets/WTP_~s1~_~s2~_~s3~_~e1~~e2~~e3~_006.tcf?raw';
 import { validateTuflowText } from '../lib/validator';
 
 describe('sample TCF validation', () => {
-  it('does not report false value-shape warnings for the WTP sample control file', () => {
+  const sampleTcf = [
+    'Geometry Control File == model\\M01_001.tgc',
+    'BC Control File == bc\\M01_001.tbc',
+    'Event File == events\\design_events.tef',
+    'Output Folder == results\\<<~s1~>>\\',
+    'MI Projection == CoordSys Earth Projection 8, 116, "m", 147, 0, 0.9996, 500000, 10000000 Bounds (0, 1000000) (5500000, 6500000)',
+    'IF Event == PMF',
+    'IF Scenario == GPU',
+    'Map Output Format == XMDF ASC'
+  ].join('\n');
+
+  it('does not report false value-shape warnings for representative TCF patterns', () => {
     const problems = validateTuflowText(sampleTcf, []);
 
-    expect(problems).not.toContainEqual(expect.objectContaining({
-      lineNumber: 11,
-      id: expect.stringMatching(/^empty-ref/)
-    }));
-    expect(problems).not.toContainEqual(expect.objectContaining({
-      lineNumber: 27,
-      id: expect.stringMatching(/^option/)
-    }));
-    expect(problems).not.toContainEqual(expect.objectContaining({
-      lineNumber: 31,
-      id: expect.stringMatching(/^option/)
-    }));
+    expect(problems.some((problem) => problem.id.startsWith('empty-ref'))).toBe(false);
+    expect(problems.some((problem) => problem.id.startsWith('option'))).toBe(false);
   });
 });

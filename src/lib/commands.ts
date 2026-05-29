@@ -1,4 +1,4 @@
-import commandData from '../../assets/tuflow_commands.json';
+import commandData from '../../assets/tuflow_commands_2026.json';
 import type { TuflowCommand } from './types';
 import { buildTuflowCommandCatalog, commandTokens, type RawTuflowCommandRecord } from './commandCatalog';
 import { normaliseCommandName } from './parser';
