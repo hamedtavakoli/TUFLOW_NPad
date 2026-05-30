@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { AlignLeft, Download, FilePlus2, FolderOpen, Moon, PlayCircle, Redo2, Save, Sun, Undo2 } from 'lucide-react';
+import { AlignLeft, Columns2, Download, FilePlus2, FolderOpen, Moon, PlayCircle, Redo2, Save, Sun, Undo2 } from 'lucide-react';
 import { Editor } from './components/Editor';
 import { FilePanel } from './components/FilePanel';
 import { ProblemsPanel } from './components/ProblemsPanel';
 import { CommandHelp } from './components/CommandHelp';
+import { CompareView } from './components/CompareView';
 import { classifyInput } from './lib/autocomplete';
 import {
   createProjectFileIndex,
@@ -116,6 +117,7 @@ type WindowWithDirectoryPicker = Window & {
 
 function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => initialTheme());
+  const [workspaceMode, setWorkspaceMode] = useState<'editor' | 'compare'>('editor');
   const [files, setFiles] = useState<OpenFileTab[]>([starterFile]);
   const [activeFileId, setActiveFileId] = useState(starterFile.id);
   const [requestedLine, setRequestedLine] = useState<{ fileId: string; lineNumber: number; nonce: number } | null>(null);
@@ -516,6 +518,14 @@ function App() {
             </button>
           </div>
           <div className="toolbar-group">
+            <button
+              type="button"
+              onClick={() => setWorkspaceMode((current) => current === 'compare' ? 'editor' : 'compare')}
+              title={workspaceMode === 'compare' ? 'Back to editor' : 'Compare open files'}
+            >
+              <Columns2 size={16} />
+              {workspaceMode === 'compare' ? 'Editor' : 'Compare'}
+            </button>
             <button type="button" className="primary-action" onClick={validateActiveFile} title="Check referenced files">
               <PlayCircle size={16} />
               Check References
@@ -536,35 +546,42 @@ function App() {
       <main className="workspace">
         <CommandHelp activeLine={activeLine} text={text} isEnabled={isActiveTuflowFile} />
         <section className="editor-column">
-          <Editor
-            value={text}
-            onChange={setActiveText}
-            fileTabs={files.map(({ id, name, savedText, text }) => ({ id, name, isDirty: text !== savedText }))}
-            activeFileId={activeFile.id}
-            onSelectFile={selectFile}
-            onCloseFile={closeFile}
-            onUndo={undo}
-            onRedo={redo}
-            inputs={projectInputs}
-            symbols={tuflowSymbols}
-            problems={problems}
-            editorLanguage={activeEditorLanguage}
-            activeLine={activeLine}
-            onActiveLineChange={(line) => setActiveLineForFile(activeFile.id, line)}
-            onProblemLineSelect={(lineNumber) => setDiagnosticLineRequest({ lineNumber, nonce: Date.now() })}
-            viewState={{
-              cursorOffset: activeFile.cursorOffset,
-              selectionStart: activeFile.selectionStart,
-              selectionEnd: activeFile.selectionEnd,
-              scrollTop: activeFile.scrollTop,
-              scrollLeft: activeFile.scrollLeft
-            }}
-            onViewStateChange={(viewState) => setViewStateForFile(activeFile.id, viewState)}
-            requestedLine={requestedLine}
-            onRequestedLineHandled={() => setRequestedLine(null)}
-            search={search}
-            onSearchChange={setSearch}
-          />
+          {workspaceMode === 'editor' ? (
+            <Editor
+              value={text}
+              onChange={setActiveText}
+              fileTabs={files.map(({ id, name, savedText, text }) => ({ id, name, isDirty: text !== savedText }))}
+              activeFileId={activeFile.id}
+              onSelectFile={selectFile}
+              onCloseFile={closeFile}
+              onUndo={undo}
+              onRedo={redo}
+              inputs={projectInputs}
+              symbols={tuflowSymbols}
+              problems={problems}
+              editorLanguage={activeEditorLanguage}
+              activeLine={activeLine}
+              onActiveLineChange={(line) => setActiveLineForFile(activeFile.id, line)}
+              onProblemLineSelect={(lineNumber) => setDiagnosticLineRequest({ lineNumber, nonce: Date.now() })}
+              viewState={{
+                cursorOffset: activeFile.cursorOffset,
+                selectionStart: activeFile.selectionStart,
+                selectionEnd: activeFile.selectionEnd,
+                scrollTop: activeFile.scrollTop,
+                scrollLeft: activeFile.scrollLeft
+              }}
+              onViewStateChange={(viewState) => setViewStateForFile(activeFile.id, viewState)}
+              requestedLine={requestedLine}
+              onRequestedLineHandled={() => setRequestedLine(null)}
+              search={search}
+              onSearchChange={setSearch}
+            />
+          ) : (
+            <CompareView
+              files={files.map(({ id, name, text }) => ({ id, name, text }))}
+              onBackToEditor={() => setWorkspaceMode('editor')}
+            />
+          )}
         </section>
         <FilePanel
           projectFileIndex={projectFileIndex}
