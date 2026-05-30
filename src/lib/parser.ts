@@ -52,11 +52,18 @@ export function detectReference(parameterText: string): string | undefined {
   const quoted = cleaned.match(/^(['"])(.*?)\1/);
   const candidate = quoted?.[2] ?? cleaned.split(/\s+/)[0];
   const normalised = candidate.trim();
+  if (isNumericLiteral(normalised)) {
+    return undefined;
+  }
   if (/[\\/]/.test(normalised) || /\.[a-z0-9]+$/i.test(normalised)) {
     return normalised;
   }
 
   return undefined;
+}
+
+function isNumericLiteral(value: string): boolean {
+  return /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?%?$/i.test(value);
 }
 
 export function getExtension(path: string): string {

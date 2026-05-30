@@ -66,9 +66,10 @@ button:disabled,
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
   display: grid;
-  grid-template-rows: 44px 1fr;
+  grid-template-rows: 44px minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .toolbar {
@@ -263,6 +264,7 @@ button:disabled,
   min-height: 0;
   display: grid;
   grid-template-columns: 240px minmax(540px, 1fr) 280px;
+  grid-template-rows: minmax(0, 1fr) 160px;
   gap: 0.5px;
   background: var(--color-border-tertiary);
 }
@@ -272,6 +274,26 @@ button:disabled,
 .editor-column {
   min-height: 0;
   background: var(--color-background-primary);
+}
+
+.help-panel {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.editor-column {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.file-panel {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+}
+
+.problems-panel {
+  grid-column: 1 / span 2;
+  grid-row: 2;
 }
 
 .file-panel,
@@ -768,9 +790,9 @@ button:disabled,
 }
 
 .editor-column {
-  height: calc(100vh - 44px);
+  height: 100%;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) minmax(36px, 112px);
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .editor-wrap {
@@ -1226,32 +1248,58 @@ button:disabled,
 .problem-row {
   width: 100%;
   display: grid;
-  grid-template-columns: 74px minmax(0, 1fr);
-  gap: 9px;
-  padding: 6px 10px;
+  grid-template-columns: 62px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  padding: 0 9px;
   border: 0;
   border-bottom: 0.5px solid #edf1f4;
   background: #ffffff;
   text-align: left;
 }
 
+.problem-row.error {
+  border-left: 3px solid #d33131;
+}
+
+.problem-row.warning {
+  border-left: 3px solid #d98400;
+}
+
+.problem-row.info {
+  border-left: 3px solid #2f6fbd;
+}
+
 .problem-row.active {
   background: #eaf5f6;
 }
 
+.problem-row.selected {
+  background: #dcecef;
+  outline: 1px solid rgba(15, 118, 110, 0.45);
+  outline-offset: -1px;
+}
+
+.problem-row:focus-visible {
+  outline: 2px solid rgba(15, 118, 110, 0.55);
+  outline-offset: -2px;
+}
+
 .problem-row span {
+  overflow: hidden;
   color: #637083;
-  font-size: 12px;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .problem-row strong {
-  font-size: 13px;
+  overflow: hidden;
+  font-size: 12px;
   font-weight: 700;
-}
-
-.problem-row small {
-  grid-column: 2;
-  color: #637083;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .problem-row.error strong {
@@ -1606,6 +1654,7 @@ button:disabled,
 :root[data-theme='dark'] .command-help-tabs button.active,
 :root[data-theme='dark'] .project-file-view-tabs button.active,
 :root[data-theme='dark'] .problem-row.active,
+:root[data-theme='dark'] .problem-row.selected,
 :root[data-theme='dark'] .command-library-row.active,
 :root[data-theme='dark'] .command-library-row:hover {
   border-color: rgba(20, 184, 166, 0.35);

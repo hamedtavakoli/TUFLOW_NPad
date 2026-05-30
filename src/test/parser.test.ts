@@ -26,4 +26,10 @@ describe('parseTuflowText', () => {
 
     expect(line.reference).toBe('gis\\model layers\\2d_code.shp');
   });
+
+  it('does not treat decimal numeric values as file references', () => {
+    const line = parseLine('Timestep == 1.0', 1);
+
+    expect(line.reference).toBeUndefined();
+  });
 });

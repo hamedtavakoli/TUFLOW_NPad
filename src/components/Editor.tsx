@@ -64,6 +64,7 @@ interface EditorProps {
   editorLanguage: EditorLanguage;
   activeLine: number;
   onActiveLineChange: (line: number) => void;
+  onProblemLineSelect: (line: number) => void;
   viewState: EditorViewState;
   onViewStateChange: (viewState: EditorViewState & { activeLine: number }) => void;
   requestedLine: { fileId: string; lineNumber: number; nonce: number } | null;
@@ -91,6 +92,7 @@ export function Editor({
   problems,
   editorLanguage,
   onActiveLineChange,
+  onProblemLineSelect,
   viewState,
   onViewStateChange,
   requestedLine,
@@ -103,17 +105,21 @@ export function Editor({
   const activeFileRef = useRef(activeFileId);
   const onChangeRef = useRef(onChange);
   const onActiveLineChangeRef = useRef(onActiveLineChange);
+  const onProblemLineSelectRef = useRef(onProblemLineSelect);
   const onViewStateChangeRef = useRef(onViewStateChange);
   const editorLanguageRef = useRef(editorLanguage);
   const valueRef = useRef(value);
 
   onChangeRef.current = onChange;
   onActiveLineChangeRef.current = onActiveLineChange;
+  onProblemLineSelectRef.current = onProblemLineSelect;
   onViewStateChangeRef.current = onViewStateChange;
   editorLanguageRef.current = editorLanguage;
   valueRef.current = value;
 
   const problemLines = useMemo(() => new Map(problems.map((problem) => [problem.lineNumber, problem])), [problems]);
+  const problemLinesRef = useRef(problemLines);
+  problemLinesRef.current = problemLines;
 
   useEffect(() => {
     if (!hostRef.current || viewRef.current) return;
@@ -140,6 +146,18 @@ export function Editor({
             }
             if (update.docChanged || update.selectionSet || update.viewportChanged) {
               captureCodeMirrorViewState(update.view, onActiveLineChangeRef.current, onViewStateChangeRef.current);
+            }
+          }),
+          EditorView.domEventHandlers({
+            click: (event, view) => {
+              if (editorLanguageRef.current !== 'tuflow') return false;
+              const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+              if (pos === null) return false;
+              const line = view.state.doc.lineAt(pos);
+              if (problemLinesRef.current.has(line.number)) {
+                onProblemLineSelectRef.current(line.number);
+              }
+              return false;
             }
           }),
           EditorView.theme({

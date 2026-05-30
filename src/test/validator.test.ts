@@ -106,6 +106,12 @@ describe('validateTuflowText', () => {
     expect(problems.some((problem) => problem.id.startsWith('number'))).toBe(false);
   });
 
+  it('does not check decimal numeric values as missing file references', () => {
+    const problems = validateTuflowText('Timestep == 1.0', []);
+
+    expect(problems.some((problem) => problem.id.startsWith('missing-input'))).toBe(false);
+  });
+
   it('accepts inline MI projection text without requiring a .mif file reference', () => {
     const problems = validateTuflowText(
       'MI Projection == CoordSys Earth Projection 8, 116, "m", 147, 0, 0.9996, 500000, 10000000 Bounds (0, 1000000) (5500000, 6500000)',

@@ -119,6 +119,7 @@ function App() {
   const [files, setFiles] = useState<OpenFileTab[]>([starterFile]);
   const [activeFileId, setActiveFileId] = useState(starterFile.id);
   const [requestedLine, setRequestedLine] = useState<{ fileId: string; lineNumber: number; nonce: number } | null>(null);
+  const [diagnosticLineRequest, setDiagnosticLineRequest] = useState<{ lineNumber: number; nonce: number } | null>(null);
   const [search, setSearch] = useState('');
   const [showMissingInputProblems, setShowMissingInputProblems] = useState(false);
   const [projectFileIndex, setProjectFileIndex] = useState<ProjectFileIndex | undefined>();
@@ -533,21 +534,7 @@ function App() {
       </header>
 
       <main className="workspace">
-        <FilePanel
-          projectFileIndex={projectFileIndex}
-          projectRootName={projectFileIndex?.rootName}
-          projectFileCount={projectFileIndex?.files.length ?? 0}
-          lastIndexedAt={lastIndexedAt}
-          validationStatus={validationStatus}
-          excludedFolderNames={projectFileIndex?.excludedFolderNames ?? excludedFolderNames}
-          onChooseProjectRoot={chooseProjectRoot}
-          onRefreshProjectRoot={refreshProjectRoot}
-          onRegisterProjectRootFiles={registerProjectRootFiles}
-          onAddExcludedFolder={addExcludedFolder}
-          onRemoveExcludedFolder={removeExcludedFolder}
-          openProjectPaths={files.map((file) => file.projectPath ?? file.name)}
-          onOpenProjectFile={openProjectFile}
-        />
+        <CommandHelp activeLine={activeLine} text={text} isEnabled={isActiveTuflowFile} />
         <section className="editor-column">
           <Editor
             value={text}
@@ -564,6 +551,7 @@ function App() {
             editorLanguage={activeEditorLanguage}
             activeLine={activeLine}
             onActiveLineChange={(line) => setActiveLineForFile(activeFile.id, line)}
+            onProblemLineSelect={(lineNumber) => setDiagnosticLineRequest({ lineNumber, nonce: Date.now() })}
             viewState={{
               cursorOffset: activeFile.cursorOffset,
               selectionStart: activeFile.selectionStart,
@@ -577,15 +565,30 @@ function App() {
             search={search}
             onSearchChange={setSearch}
           />
-          <ProblemsPanel
-            problems={problems}
-            activeLine={activeLine}
-            showMissingInputProblems={showMissingInputProblems}
-            onShowMissingInputProblemsChange={setShowMissingInputProblems}
-            onSelectLine={goToLine}
-          />
         </section>
-        <CommandHelp activeLine={activeLine} text={text} isEnabled={isActiveTuflowFile} />
+        <FilePanel
+          projectFileIndex={projectFileIndex}
+          projectRootName={projectFileIndex?.rootName}
+          projectFileCount={projectFileIndex?.files.length ?? 0}
+          lastIndexedAt={lastIndexedAt}
+          validationStatus={validationStatus}
+          excludedFolderNames={projectFileIndex?.excludedFolderNames ?? excludedFolderNames}
+          onChooseProjectRoot={chooseProjectRoot}
+          onRefreshProjectRoot={refreshProjectRoot}
+          onRegisterProjectRootFiles={registerProjectRootFiles}
+          onAddExcludedFolder={addExcludedFolder}
+          onRemoveExcludedFolder={removeExcludedFolder}
+          openProjectPaths={files.map((file) => file.projectPath ?? file.name)}
+          onOpenProjectFile={openProjectFile}
+        />
+        <ProblemsPanel
+          problems={problems}
+          activeLine={activeLine}
+          selectedLineRequest={diagnosticLineRequest}
+          showMissingInputProblems={showMissingInputProblems}
+          onShowMissingInputProblemsChange={setShowMissingInputProblems}
+          onSelectLine={goToLine}
+        />
       </main>
     </div>
   );
