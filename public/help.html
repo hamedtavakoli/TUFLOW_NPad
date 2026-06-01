@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TUFLOW Command Studio Help</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f6f8fb;
+        --panel: #ffffff;
+        --text: #172033;
+        --muted: #5d6b82;
+        --line: #d9e1ec;
+        --accent: #2563eb;
+        --accent-soft: #e8f0ff;
+        --warn: #9a5b00;
+        --warn-bg: #fff7df;
+        --code: #eff3f8;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0d1320;
+          --panel: #151d2c;
+          --text: #edf3ff;
+          --muted: #a7b4c8;
+          --line: #2a3548;
+          --accent: #7aa7ff;
+          --accent-soft: #172845;
+          --warn: #ffd166;
+          --warn-bg: #33290f;
+          --code: #202a3a;
+        }
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.55;
+      }
+
+      a { color: var(--accent); }
+
+      .shell {
+        display: grid;
+        grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+        gap: 24px;
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 28px;
+      }
+
+      header,
+      nav,
+      main section {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+      }
+
+      header {
+        grid-column: 1 / -1;
+        padding: 32px;
+      }
+
+      header p {
+        max-width: 780px;
+        color: var(--muted);
+        font-size: 1.05rem;
+      }
+
+      h1,
+      h2,
+      h3 { line-height: 1.2; }
+      h1 { margin: 0 0 12px; font-size: clamp(2rem, 4vw, 3.4rem); }
+      h2 { margin-top: 0; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+      h3 { margin-bottom: 8px; }
+
+      nav {
+        position: sticky;
+        top: 18px;
+        align-self: start;
+        padding: 18px;
+      }
+
+      nav strong { display: block; margin-bottom: 10px; }
+      nav a {
+        display: block;
+        padding: 7px 0;
+        text-decoration: none;
+      }
+
+      main {
+        display: grid;
+        gap: 18px;
+      }
+
+      section { padding: 24px; }
+
+      .quick-grid,
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 14px;
+      }
+
+      .card,
+      .tip,
+      .warning {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 16px;
+        background: color-mix(in srgb, var(--panel), var(--bg) 32%);
+      }
+
+      .card h3,
+      .tip h3,
+      .warning h3 { margin-top: 0; }
+
+      .tip {
+        border-color: color-mix(in srgb, var(--accent), var(--line) 55%);
+        background: var(--accent-soft);
+      }
+
+      .warning {
+        border-color: color-mix(in srgb, var(--warn), var(--line) 45%);
+        background: var(--warn-bg);
+      }
+
+      code,
+      kbd {
+        border-radius: 6px;
+        background: var(--code);
+        padding: 0.12rem 0.35rem;
+        font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+        font-size: 0.92em;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0;
+      }
+
+      th,
+      td {
+        border: 1px solid var(--line);
+        padding: 10px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th { background: color-mix(in srgb, var(--panel), var(--bg) 45%); }
+      ol li,
+      ul li { margin-bottom: 8px; }
+
+      .button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 18px;
+      }
+
+      .button-row a {
+        border: 1px solid var(--accent);
+        border-radius: 999px;
+        padding: 8px 14px;
+        text-decoration: none;
+        background: var(--accent-soft);
+      }
+
+      footer {
+        grid-column: 1 / -1;
+        color: var(--muted);
+        text-align: center;
+        padding: 12px;
+      }
+
+      @media (max-width: 820px) {
+        .shell { display: block; padding: 16px; }
+        nav { position: static; margin: 18px 0; }
+        main { display: grid; gap: 18px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header>
+        <h1>TUFLOW Command Studio Help</h1>
+        <p>
+          A practical guide to opening model files, using the TUFLOW editor tools,
+          checking references, browsing project files, and comparing text in TCS.
+        </p>
+        <div class="button-row">
+          <a href="./">Back to app</a>
+          <a href="#quick-start">Quick start</a>
+          <a href="#troubleshooting">Troubleshooting</a>
+        </div>
+      </header>
+
+      <nav aria-label="Help topics">
+        <strong>Topics</strong>
+        <a href="#quick-start">Quick start</a>
+        <a href="#workspace">Workspace layout</a>
+        <a href="#files">Files and tabs</a>
+        <a href="#editing">Editing support</a>
+        <a href="#project-root">Project Root</a>
+        <a href="#diagnostics">Diagnostics</a>
+        <a href="#command-guide">Command Guide</a>
+        <a href="#compare">Compare mode</a>
+        <a href="#shortcuts">Shortcuts and tips</a>
+        <a href="#troubleshooting">Troubleshooting</a>
+      </nav>
+
+      <main>
+        <section id="quick-start">
+          <h2>Quick start</h2>
+          <ol>
+            <li>Select <strong>Choose Root</strong> in the Project Files panel and choose the model folder that contains your TUFLOW inputs.</li>
+            <li>Use <strong>Open</strong> to load one or more control/support files, or use <strong>New</strong> to start a new file.</li>
+            <li>Edit with syntax highlighting, autocomplete, formatting, active-line command help, and diagnostics.</li>
+            <li>Use <strong>Check References</strong> after choosing a Project Root to validate referenced file paths.</li>
+            <li>Review issues in <strong>Diagnostics</strong>; select a problem row to jump to that line.</li>
+            <li>Use <strong>Save</strong> to download the active file, or <strong>Export</strong> to download diagnostics.</li>
+          </ol>
+          <div class="tip">
+            <h3>Best first action</h3>
+            <p>Choose the Project Root before running reference checks. Without an indexed root, TCS can still edit files, but it cannot confirm whether referenced project files exist.</p>
+          </div>
+        </section>
+
+        <section id="workspace">
+          <h2>Workspace layout</h2>
+          <div class="quick-grid">
+            <div class="card">
+              <h3>Top toolbar</h3>
+              <p>Create, open, save, undo, redo, toggle theme, compare files, check references, format the active file, and export diagnostics.</p>
+            </div>
+            <div class="card">
+              <h3>Command Guide</h3>
+              <p>Shows help for the active line and includes the searchable command library.</p>
+            </div>
+            <div class="card">
+              <h3>Editor</h3>
+              <p>Hosts open tabs, the CodeMirror editor, search, syntax highlighting, autocomplete, and problem highlights.</p>
+            </div>
+            <div class="card">
+              <h3>Project Files</h3>
+              <p>Indexes your selected model root and lets you browse files by folder tree or TUFLOW file type.</p>
+            </div>
+            <div class="card">
+              <h3>Diagnostics</h3>
+              <p>Lists validation and reference-check messages for the active file.</p>
+            </div>
+          </div>
+        </section>
+
+        <section id="files">
+          <h2>Files and tabs</h2>
+          <ul>
+            <li><strong>New</strong> creates an editable untitled TUFLOW control-style file.</li>
+            <li><strong>Open</strong> loads one or more readable project files into tabs.</li>
+            <li><strong>Save</strong> downloads the active tab content using the tab name.</li>
+            <li>Dirty markers identify tabs with unsaved changes.</li>
+            <li>Each tab keeps its own cursor, selection, scroll position, and undo/redo state.</li>
+          </ul>
+          <table>
+            <thead>
+              <tr><th>File kind</th><th>Editor behavior</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>TUFLOW control-like files</td><td>Syntax highlighting, autocomplete, formatting, validation, symbols, and command help.</td></tr>
+              <tr><td><code>.bat</code> and <code>.cmd</code></td><td>Batch syntax highlighting.</td></tr>
+              <tr><td>Readable support files</td><td>Plain text editing for files such as CSV, log, text, INI, CFG, grids, and other project text files.</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="editing">
+          <h2>Editing support</h2>
+          <ul>
+            <li><strong>Autocomplete</strong> suggests known TUFLOW commands and project inputs while typing.</li>
+            <li><strong>Format File</strong> is available for TUFLOW editor files and normalises command layout.</li>
+            <li><strong>Search</strong> in the editor helps locate text in the active tab.</li>
+            <li><strong>Undo/Redo</strong> buttons apply to the active tab.</li>
+            <li><strong>Dark/light mode</strong> follows the toolbar toggle and is saved in the browser.</li>
+          </ul>
+          <div class="tip">
+            <h3>Autocomplete tip</h3>
+            <p>Use autocomplete to reduce command spelling mistakes. If a command is not recognised, check the Command Library for current and legacy command names.</p>
+          </div>
+        </section>
+
+        <section id="project-root">
+          <h2>Project Root and Project Files</h2>
+          <p>The Project Root is the folder TCS uses as the reference point for file availability checks.</p>
+          <ol>
+            <li>Click <strong>Choose Root</strong> and select the model root folder.</li>
+            <li>TCS indexes files and folders, excluding common result/log/check folders by default.</li>
+            <li>Use <strong>Refresh</strong> after changing files outside the browser.</li>
+            <li>Use the search box, type filter, extension filter, tree view, and type view to find files quickly.</li>
+            <li>Open indexed files directly from the panel when the browser provides file access.</li>
+          </ol>
+          <div class="warning">
+            <h3>Browser access note</h3>
+            <p>Folder and file access depends on browser capabilities and permissions. If direct folder access is unavailable, use the file picker fallback to select project files.</p>
+          </div>
+        </section>
+
+        <section id="diagnostics">
+          <h2>Reference checks and diagnostics</h2>
+          <ul>
+            <li><strong>Check References</strong> validates the active file and checks referenced paths against the indexed Project Root.</li>
+            <li>The <strong>Reference Checks</strong> toggle controls whether file availability messages are shown.</li>
+            <li>Select a diagnostics row to jump to the related line in the editor.</li>
+            <li><strong>Export</strong> downloads the current diagnostics so they can be shared or reviewed outside the app.</li>
+          </ul>
+          <table>
+            <thead>
+              <tr><th>Status</th><th>Meaning</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Available</td><td>The referenced path or file name was found in the Project Root index.</td></tr>
+              <tr><td>Missing</td><td>The reference was checkable, but no matching indexed file was found.</td></tr>
+              <tr><td>Excluded</td><td>The path is inside an excluded folder such as results, logs, or checks.</td></tr>
+              <tr><td>Uncheckable</td><td>The reference contains variables, wildcards, or placeholders that cannot be resolved statically.</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="command-guide">
+          <h2>Command Guide and Library</h2>
+          <ul>
+            <li><strong>Line Guide</strong> shows syntax, summary, expected value details, and documentation links for the command on the active line.</li>
+            <li><strong>Library</strong> lets you search all loaded commands.</li>
+            <li>Filter the library by category and by current/legacy command status.</li>
+            <li>Use documentation links for deeper TUFLOW reference material when available.</li>
+          </ul>
+        </section>
+
+        <section id="compare">
+          <h2>Compare mode</h2>
+          <p>Use <strong>Compare</strong> to review differences between two open tabs or pasted text.</p>
+          <ul>
+            <li>Choose left and right sources from open tabs, or select manual paste.</li>
+            <li>Use <strong>Previous</strong> and <strong>Next</strong> to move between changes.</li>
+            <li>Use <strong>Swap</strong> to reverse sides and <strong>Clear</strong> to reset manual content.</li>
+            <li>Turn on ignore options for blank lines, extra spaces, case, comments, or unchanged lines.</li>
+            <li>Scroll is synchronized between the left and right result panels.</li>
+          </ul>
+        </section>
+
+        <section id="shortcuts">
+          <h2>Shortcuts and tips</h2>
+          <ul>
+            <li><kbd>Tab</kbd> accepts the selected autocomplete suggestion.</li>
+            <li><kbd>ArrowRight</kbd> accepts the next word of a selected autocomplete suggestion.</li>
+            <li>Save often by downloading the active tab after important changes.</li>
+            <li>Refresh the Project Root index after adding, renaming, or deleting files outside TCS.</li>
+            <li>Use Compare before and after formatting if you want to review formatting-only changes.</li>
+          </ul>
+        </section>
+
+        <section id="troubleshooting">
+          <h2>Troubleshooting</h2>
+          <div class="cards">
+            <div class="card">
+              <h3>Reference checks show missing files</h3>
+              <p>Confirm the correct Project Root is selected, refresh the index, and check whether the file is inside an excluded folder or uses variables/wildcards.</p>
+            </div>
+            <div class="card">
+              <h3>Command help is empty</h3>
+              <p>Command help is available for recognised TUFLOW control-file commands. Check spelling, remove leading comments, or search in the Library.</p>
+            </div>
+            <div class="card">
+              <h3>Format File is disabled</h3>
+              <p>Formatting is only enabled for TUFLOW editor-language files. Plain text and batch files can still be edited and saved.</p>
+            </div>
+            <div class="card">
+              <h3>Project files cannot open from the panel</h3>
+              <p>Your browser may not expose direct file handles for that selection. Use the Open button to load the file manually.</p>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        TUFLOW Command Studio help page. This static page is bundled with the app and works without a network connection.
+      </footer>
+    </div>
+  </body>
+</html>
