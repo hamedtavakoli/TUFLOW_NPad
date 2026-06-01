@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { AlignLeft, Columns2, Download, FilePlus2, FolderOpen, Moon, PlayCircle, Redo2, Save, Sun, Undo2 } from 'lucide-react';
+import { AlignLeft, Columns2, Download, FilePlus2, FolderOpen, HelpCircle, Moon, PlayCircle, Redo2, Save, Sun, Undo2 } from 'lucide-react';
 import { Editor } from './components/Editor';
 import { FilePanel } from './components/FilePanel';
 import { ProblemsPanel } from './components/ProblemsPanel';
@@ -500,6 +500,10 @@ function App() {
               <Save size={16} />
               Save
             </button>
+            <a className="button-like" href={`${import.meta.env.BASE_URL}help.html`} target="_blank" rel="noreferrer" title="Open help page">
+              <HelpCircle size={16} />
+              Help
+            </a>
           </div>
           <div className="toolbar-group compact">
             <button
