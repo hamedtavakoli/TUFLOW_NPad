@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { isTuflowKeyword, tuflowIncludeReadWordSet } from '../language/tuflowKeywords';
 import { parseTuflowLine, splitInlineComment, type TuflowAstLine } from '../parser/tuflowParser';
 
-type TokenKind =
+export type TokenKind =
   | 'comment'
   | 'command'
   | 'keyword'
@@ -14,7 +14,7 @@ type TokenKind =
   | 'variable'
   | 'text';
 
-interface HighlightToken {
+export interface HighlightToken {
   kind: TokenKind;
   text: string;
 }

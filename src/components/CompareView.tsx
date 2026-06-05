@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject, type RefObject } from 'react';
 import { ArrowDown, ArrowLeftRight, ArrowUp, RotateCcw } from 'lucide-react';
+import { getEditorLanguage, type EditorLanguage } from '../lib/editorLanguage';
+import { tokenizeSyntaxLine, type SyntaxToken } from '../lib/syntaxHighlight';
 import { compareText, type CompareLine, type CompareRow, type CompareTextSegment, type TextCompareOptions } from '../lib/textCompare';
 
 interface CompareFileOption {
@@ -49,6 +51,8 @@ export function CompareView({ files, onBackToEditor }: CompareViewProps) {
   const rightText = rightSourceId === 'manual' ? rightManualText : rightFile?.text ?? '';
   const leftName = leftSourceId === 'manual' ? 'Manual left text' : leftFile?.name ?? 'Unreadable left file';
   const rightName = rightSourceId === 'manual' ? 'Manual right text' : rightFile?.name ?? 'Unreadable right file';
+  const leftLanguage = leftSourceId === 'manual' ? 'plain' : getEditorLanguage(leftName);
+  const rightLanguage = rightSourceId === 'manual' ? 'plain' : getEditorLanguage(rightName);
   const isLargeComparison = leftText.length + rightText.length > 80_000;
   const result = useMemo(() => compareText(debouncedLeftText, debouncedRightText, options), [debouncedLeftText, debouncedRightText, options]);
   const hasUnreadableFile = (leftSourceId !== 'manual' && !leftFile) || (rightSourceId !== 'manual' && !rightFile);
@@ -175,6 +179,7 @@ export function CompareView({ files, onBackToEditor }: CompareViewProps) {
           side="left"
           title={leftName}
           rows={result.rows}
+          language={leftLanguage}
           activeChangeIndex={activeChangeIndex}
           rowRefs={rowRefs}
           scrollRef={leftScrollRef}
@@ -184,6 +189,7 @@ export function CompareView({ files, onBackToEditor }: CompareViewProps) {
           side="right"
           title={rightName}
           rows={result.rows}
+          language={rightLanguage}
           activeChangeIndex={activeChangeIndex}
           rowRefs={rowRefs}
           scrollRef={rightScrollRef}
@@ -240,13 +246,14 @@ interface CompareResultPanelProps {
   side: 'left' | 'right';
   title: string;
   rows: CompareRow[];
+  language: EditorLanguage;
   activeChangeIndex: number;
   rowRefs: MutableRefObject<Map<number, HTMLDivElement>>;
   scrollRef: RefObject<HTMLDivElement | null>;
   onScroll: () => void;
 }
 
-function CompareResultPanel({ side, title, rows, activeChangeIndex, rowRefs, scrollRef, onScroll }: CompareResultPanelProps) {
+function CompareResultPanel({ side, title, rows, language, activeChangeIndex, rowRefs, scrollRef, onScroll }: CompareResultPanelProps) {
   return (
     <div className="compare-panel">
       <div className="compare-panel-title" title={title}>{title}</div>
@@ -258,6 +265,7 @@ function CompareResultPanel({ side, title, rows, activeChangeIndex, rowRefs, scr
             <CompareRowView
               row={row}
               side={side}
+              language={language}
               isActiveChange={row.changeIndex === activeChangeIndex}
               rowRefs={rowRefs}
               key={`${side}-${row.id}`}
@@ -272,11 +280,13 @@ function CompareResultPanel({ side, title, rows, activeChangeIndex, rowRefs, scr
 function CompareRowView({
   row,
   side,
+  language,
   isActiveChange,
   rowRefs
 }: {
   row: CompareRow;
   side: 'left' | 'right';
+  language: EditorLanguage;
   isActiveChange: boolean;
   rowRefs: MutableRefObject<Map<number, HTMLDivElement>>;
 }) {
@@ -296,7 +306,7 @@ function CompareRowView({
       }}
     >
       <span className="compare-line-number">{line?.lineNumber ?? ''}</span>
-      <code>{renderLineText(line)}</code>
+      <code>{renderLineText(line, language)}</code>
     </div>
   );
 }
@@ -311,14 +321,82 @@ function rightRowKind(row: CompareRow) {
   return row.kind;
 }
 
-function renderLineText(line: CompareLine | undefined) {
+function renderLineText(line: CompareLine | undefined, language: EditorLanguage) {
   if (!line) return '\u00a0';
-  if (line.segments) {
-    return line.segments.map((segment, index) => <CompareSegment segment={segment} key={`${index}-${segment.text}`} />);
-  }
-  return line.text.length === 0 ? '\u00a0' : line.text;
+  if (line.text.length === 0) return '\u00a0';
+  return renderSyntaxSegments(tokenizeSyntaxLine(line.text, language, line.lineNumber), line.segments);
 }
 
-function CompareSegment({ segment }: { segment: CompareTextSegment }) {
-  return segment.changed ? <mark>{segment.text}</mark> : <>{segment.text}</>;
+function renderSyntaxSegments(tokens: SyntaxToken[], compareSegments: CompareTextSegment[] | undefined) {
+  if (!compareSegments) {
+    return tokens.map((token, index) => (
+      <span className={token.className} key={`${index}-${token.text}`}>
+        {token.text}
+      </span>
+    ));
+  }
+
+  const changedRanges = compareChangedRanges(compareSegments);
+  let cursor = 0;
+
+  return tokens.flatMap((token, tokenIndex) => {
+    const tokenStart = cursor;
+    const tokenEnd = tokenStart + token.text.length;
+    cursor = tokenEnd;
+
+    return splitTokenByChangedRanges(token, tokenStart, tokenEnd, changedRanges).map((part, partIndex) => {
+      const content = <span className={token.className}>{part.text}</span>;
+      return part.changed ? (
+        <mark key={`${tokenIndex}-${partIndex}-${part.text}`}>{content}</mark>
+      ) : (
+        <span className="compare-token-part" key={`${tokenIndex}-${partIndex}-${part.text}`}>{content}</span>
+      );
+    });
+  });
+}
+
+function compareChangedRanges(compareSegments: CompareTextSegment[]) {
+  const ranges: Array<{ from: number; to: number }> = [];
+  let cursor = 0;
+
+  for (const segment of compareSegments) {
+    const from = cursor;
+    const to = from + segment.text.length;
+    if (segment.changed && to > from) {
+      ranges.push({ from, to });
+    }
+    cursor = to;
+  }
+
+  return ranges;
+}
+
+function splitTokenByChangedRanges(
+  token: SyntaxToken,
+  tokenStart: number,
+  tokenEnd: number,
+  changedRanges: Array<{ from: number; to: number }>
+) {
+  const parts: Array<{ changed: boolean; text: string }> = [];
+  let cursor = tokenStart;
+
+  for (const range of changedRanges) {
+    if (range.to <= tokenStart || range.from >= tokenEnd) continue;
+    const changedStart = Math.max(range.from, tokenStart);
+    const changedEnd = Math.min(range.to, tokenEnd);
+
+    if (changedStart > cursor) {
+      parts.push({ changed: false, text: token.text.slice(cursor - tokenStart, changedStart - tokenStart) });
+    }
+    if (changedEnd > changedStart) {
+      parts.push({ changed: true, text: token.text.slice(changedStart - tokenStart, changedEnd - tokenStart) });
+    }
+    cursor = changedEnd;
+  }
+
+  if (cursor < tokenEnd) {
+    parts.push({ changed: false, text: token.text.slice(cursor - tokenStart) });
+  }
+
+  return parts.length > 0 ? parts : [{ changed: false, text: token.text }];
 }

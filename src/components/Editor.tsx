@@ -26,10 +26,9 @@ import {
 import { getAutocompleteSuggestions } from '../lib/autocomplete';
 import { completionStart } from '../lib/completionRange';
 import type { EditorLanguage } from '../lib/editorLanguage';
+import { tokenizeSyntaxLine } from '../lib/syntaxHighlight';
 import type { Problem, ProjectInput, Suggestion } from '../lib/types';
 import type { TuflowSymbolIndex } from '../lib/tuflowSymbols';
-import { parseTuflowLine } from '../tuflow/parser/tuflowParser';
-import { tokenizeTuflowLine } from '../tuflow/editor/tuflowHighlighter';
 
 interface EditorFileTab {
   id: string;
@@ -413,8 +412,7 @@ function autocompleteFromInputs(editorLanguage: EditorLanguage, inputs: ProjectI
 }
 
 function syntaxDecorations(editorLanguage: EditorLanguage): Extension {
-  if (editorLanguage === 'tuflow') return tuflowSyntaxDecorations();
-  if (editorLanguage === 'batch') return batchSyntaxDecorations();
+  if (editorLanguage === 'tuflow' || editorLanguage === 'batch') return lineSyntaxDecorations(editorLanguage);
   return [];
 }
 
@@ -523,18 +521,18 @@ function maybeStartValueCompletion(update: ViewUpdate, editorLanguage: EditorLan
   }
 }
 
-function tuflowSyntaxDecorations() {
+function lineSyntaxDecorations(editorLanguage: EditorLanguage) {
   return ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
 
       constructor(view: EditorView) {
-        this.decorations = buildSyntaxDecorations(view);
+        this.decorations = buildSyntaxDecorations(view, editorLanguage);
       }
 
       update(update: ViewUpdate) {
         if (update.docChanged || update.viewportChanged) {
-          this.decorations = buildSyntaxDecorations(update.view);
+          this.decorations = buildSyntaxDecorations(update.view, editorLanguage);
         }
       }
     },
@@ -544,18 +542,18 @@ function tuflowSyntaxDecorations() {
   );
 }
 
-function buildSyntaxDecorations(view: EditorView) {
+function buildSyntaxDecorations(view: EditorView, editorLanguage: EditorLanguage) {
   const decorations = [];
   for (const range of view.visibleRanges) {
     let pos = range.from;
     while (pos <= range.to) {
       const line = view.state.doc.lineAt(pos);
       let tokenStart = line.from;
-      const tokens = tokenizeTuflowLine(line.text, parseTuflowLine(line.text, line.number));
+      const tokens = tokenizeSyntaxLine(line.text, editorLanguage, line.number);
       for (const token of tokens) {
         const tokenEnd = tokenStart + token.text.length;
         if (token.text.trim()) {
-          decorations.push(Decoration.mark({ class: `tok-${token.kind}` }).range(tokenStart, tokenEnd));
+          decorations.push(Decoration.mark({ class: token.className }).range(tokenStart, tokenEnd));
         }
         tokenStart = tokenEnd;
       }
@@ -564,74 +562,6 @@ function buildSyntaxDecorations(view: EditorView) {
     }
   }
   return Decoration.set(decorations, true);
-}
-
-function batchSyntaxDecorations() {
-  return ViewPlugin.fromClass(
-    class {
-      decorations: DecorationSet;
-
-      constructor(view: EditorView) {
-        this.decorations = buildBatchSyntaxDecorations(view);
-      }
-
-      update(update: ViewUpdate) {
-        if (update.docChanged || update.viewportChanged) {
-          this.decorations = buildBatchSyntaxDecorations(update.view);
-        }
-      }
-    },
-    {
-      decorations: (plugin) => plugin.decorations
-    }
-  );
-}
-
-function buildBatchSyntaxDecorations(view: EditorView) {
-  const decorations = [];
-  const tokenPattern =
-    /"[^"]*"|%[^%\s]+%|![^!\s]+!|\b(?:assoc|call|cd|choice|cls|copy|del|dir|do|echo|else|endlocal|erase|errorlevel|exist|exit|for|goto|if|in|mkdir|move|not|pause|popd|pushd|rem|ren|rmdir|robocopy|set|setlocal|shift|start|timeout|title|xcopy)\b|&&|\|\||[|&<>]/gi;
-
-  for (const range of view.visibleRanges) {
-    let pos = range.from;
-    while (pos <= range.to) {
-      const line = view.state.doc.lineAt(pos);
-      const text = line.text;
-      const trimmedStart = text.search(/\S/);
-      const trimmed = trimmedStart >= 0 ? text.slice(trimmedStart) : '';
-
-      if (/^(?:::|rem\b)/i.test(trimmed)) {
-        decorations.push(Decoration.mark({ class: 'tok-batch-comment' }).range(line.from + trimmedStart, line.to));
-      } else {
-        const label = trimmed.match(/^:[^\s]+/);
-        if (label && trimmedStart >= 0) {
-          decorations.push(Decoration.mark({ class: 'tok-batch-label' }).range(line.from + trimmedStart, line.from + trimmedStart + label[0].length));
-        }
-
-        for (const match of text.matchAll(tokenPattern)) {
-          const token = match[0];
-          const start = line.from + (match.index ?? 0);
-          const end = start + token.length;
-          const className = batchTokenClass(token);
-          if (className) {
-            decorations.push(Decoration.mark({ class: className }).range(start, end));
-          }
-        }
-      }
-
-      if (line.to >= range.to) break;
-      pos = line.to + 1;
-    }
-  }
-
-  return Decoration.set(decorations, true);
-}
-
-function batchTokenClass(token: string): string | undefined {
-  if (/^"/.test(token)) return 'tok-batch-string';
-  if (/^%|^!/.test(token)) return 'tok-batch-variable';
-  if (/^(?:&&|\|\||[|&<>])$/.test(token)) return 'tok-batch-operator';
-  return 'tok-batch-keyword';
 }
 
 function problemDecorations(editorLanguage: EditorLanguage, problemLines: Map<number, Problem>): Extension {
