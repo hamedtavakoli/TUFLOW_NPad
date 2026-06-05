@@ -3,6 +3,7 @@ import {
   checkProjectFileAvailability,
   createProjectFileIndex,
   defaultExcludedFolderNames,
+  findProjectFileByReference,
   isReadableProjectFile,
   isUncheckableReference,
   isPathInsideExcludedFolder,
@@ -26,6 +27,19 @@ describe('project file index', () => {
     const index = createProjectFileIndex('Model', ['M01_001.tgc']);
 
     expect(checkProjectFileAvailability('model\\M01_001.tgc', index)).toEqual({ status: 'available' });
+  });
+
+  it('finds referenced project files by exact path or unique name', () => {
+    const index = createProjectFileIndex('Model', ['model\\M01_001.tgc', 'bc\\M01_001.tbc']);
+
+    expect(findProjectFileByReference('model/M01_001.tgc', index)?.path).toBe('model\\M01_001.tgc');
+    expect(findProjectFileByReference('M01_001.tbc', index)?.path).toBe('bc\\M01_001.tbc');
+  });
+
+  it('does not resolve ambiguous referenced filenames', () => {
+    const index = createProjectFileIndex('Model', ['model\\common.tgc', 'other\\common.tgc']);
+
+    expect(findProjectFileByReference('common.tgc', index)).toBeUndefined();
   });
 
   it('reports missing paths', () => {

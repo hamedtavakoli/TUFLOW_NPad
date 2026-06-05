@@ -143,6 +143,21 @@ export function checkProjectFileAvailability(reference: string, index: ProjectFi
     : { status: 'missing' };
 }
 
+export function findProjectFileByReference(reference: string, index: ProjectFileIndex): ProjectFileEntry | undefined {
+  const normalised = normaliseProjectPath(reference);
+  if (!normalised || isUncheckableReference(normalised) || isPathInsideExcludedFolder(normalised, index.excludedFolderNames)) {
+    return undefined;
+  }
+
+  const pathKey = normalised.toLowerCase();
+  const exactMatch = index.files.find((file) => file.path.toLowerCase() === pathKey);
+  if (exactMatch) return exactMatch;
+
+  const nameKey = pathKey.split('\\').at(-1) ?? pathKey;
+  const nameMatches = index.files.filter((file) => file.name.toLowerCase() === nameKey);
+  return nameMatches.length === 1 ? nameMatches[0] : undefined;
+}
+
 export function isUncheckableReference(reference: string): boolean {
   return /<<[^>]+>>|~[^~]+~|[*?]/.test(reference);
 }

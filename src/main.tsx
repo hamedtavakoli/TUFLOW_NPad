@@ -12,6 +12,7 @@ import {
   createProjectFileIndexFromDirectoryHandle,
   createProjectFileIndexFromFileList,
   defaultExcludedFolderNames,
+  findProjectFileByReference,
   isReadableProjectFile,
   normaliseExcludedFolderNames,
   readableProjectFileAccept
@@ -402,6 +403,35 @@ function App() {
     selectFile(nextFile.id);
   };
 
+  const openReferencedFile = async (reference: string) => {
+    const existing = files.find((file) => sameProjectPath(file.projectPath ?? file.name, reference));
+    if (existing) {
+      selectFile(existing.id);
+      return;
+    }
+
+    if (!projectFileIndex) {
+      setValidationStatus('Choose a model root before opening referenced files.');
+      return;
+    }
+
+    const projectFile = findProjectFileByReference(reference, projectFileIndex);
+    if (!projectFile) {
+      setValidationStatus(`Referenced file "${reference}" was not found, is excluded, or is ambiguous.`);
+      return;
+    }
+    if (!isReadableProjectFile(projectFile)) {
+      setValidationStatus(`Referenced file "${projectFile.name}" is not a readable text file.`);
+      return;
+    }
+    if (!projectFile.source) {
+      setValidationStatus('File content unavailable. Select the project root again or choose a readable text file.');
+      return;
+    }
+
+    await openProjectFile(projectFile.path);
+  };
+
   const refreshProjectRoot = async () => {
     if (!projectDirectoryHandle) {
       await chooseProjectRoot();
@@ -567,6 +597,7 @@ function App() {
               activeLine={activeLine}
               onActiveLineChange={(line) => setActiveLineForFile(activeFile.id, line)}
               onProblemLineSelect={(lineNumber) => setDiagnosticLineRequest({ lineNumber, nonce: Date.now() })}
+              onOpenReferencedFile={openReferencedFile}
               viewState={{
                 cursorOffset: activeFile.cursorOffset,
                 selectionStart: activeFile.selectionStart,

@@ -25,6 +25,7 @@ import {
 } from '@codemirror/view';
 import { getAutocompleteSuggestions } from '../lib/autocomplete';
 import { completionStart } from '../lib/completionRange';
+import { referenceAtColumn } from '../lib/editorReferences';
 import type { EditorLanguage } from '../lib/editorLanguage';
 import { tokenizeSyntaxLine } from '../lib/syntaxHighlight';
 import type { Problem, ProjectInput, Suggestion } from '../lib/types';
@@ -64,6 +65,7 @@ interface EditorProps {
   activeLine: number;
   onActiveLineChange: (line: number) => void;
   onProblemLineSelect: (line: number) => void;
+  onOpenReferencedFile: (reference: string) => void;
   viewState: EditorViewState;
   onViewStateChange: (viewState: EditorViewState & { activeLine: number }) => void;
   requestedLine: { fileId: string; lineNumber: number; nonce: number } | null;
@@ -92,6 +94,7 @@ export function Editor({
   editorLanguage,
   onActiveLineChange,
   onProblemLineSelect,
+  onOpenReferencedFile,
   viewState,
   onViewStateChange,
   requestedLine,
@@ -105,6 +108,7 @@ export function Editor({
   const onChangeRef = useRef(onChange);
   const onActiveLineChangeRef = useRef(onActiveLineChange);
   const onProblemLineSelectRef = useRef(onProblemLineSelect);
+  const onOpenReferencedFileRef = useRef(onOpenReferencedFile);
   const onViewStateChangeRef = useRef(onViewStateChange);
   const editorLanguageRef = useRef(editorLanguage);
   const valueRef = useRef(value);
@@ -112,6 +116,7 @@ export function Editor({
   onChangeRef.current = onChange;
   onActiveLineChangeRef.current = onActiveLineChange;
   onProblemLineSelectRef.current = onProblemLineSelect;
+  onOpenReferencedFileRef.current = onOpenReferencedFile;
   onViewStateChangeRef.current = onViewStateChange;
   editorLanguageRef.current = editorLanguage;
   valueRef.current = value;
@@ -157,6 +162,16 @@ export function Editor({
                 onProblemLineSelectRef.current(line.number);
               }
               return false;
+            },
+            dblclick: (event, view) => {
+              if (editorLanguageRef.current !== 'tuflow') return false;
+              const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+              if (pos === null) return false;
+              const line = view.state.doc.lineAt(pos);
+              const reference = referenceAtColumn(line.text, pos - line.from);
+              if (!reference) return false;
+              onOpenReferencedFileRef.current(reference);
+              return true;
             }
           }),
           EditorView.theme({
